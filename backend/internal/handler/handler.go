@@ -1,0 +1,134 @@
+package handler
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/CodingFervor/tmall-clone/backend/internal/model"
+	"github.com/CodingFervor/tmall-clone/backend/internal/repository"
+)
+
+// Handler bundles all repositories and the JWT secret.
+type Handler struct {
+	User    *repository.UserRepo
+	Brand   *repository.BrandRepo
+	Cat     *repository.CategoryRepo
+	Product *repository.ProductRepo
+	Cart    *repository.CartRepo
+	Order   *repository.OrderRepo
+	Review  *repository.ReviewRepo
+	jwtKey  []byte
+}
+
+func New(jwtSecret string, u *repository.UserRepo, b *repository.BrandRepo, c *repository.CategoryRepo, p *repository.ProductRepo,
+	ca *repository.CartRepo, o *repository.OrderRepo, r *repository.ReviewRepo) *Handler {
+	return &Handler{User: u, Brand: b, Cat: c, Product: p, Cart: ca, Order: o, Review: r, jwtKey: []byte(jwtSecret)}
+}
+
+// ---- JWT (HS256, hand-rolled) ----
+
+func (h *Handler) signToken(userID int64, username string) string {
+	header := `{"alg":"HS256","typ":"JWT"}`
+	payload := `{"user_id":` + strconv.FormatInt(userID, 10) + `,"username":"` + username + `","exp":` + strconv.FormatInt(time.Now().Add(72*time.Hour).Unix(), 10) + `}`
+	return encodeSeg(header) + "." + encodeSeg(payload) + "." + h.signature(header, payload)
+}
+
+func (h *Handler) parseToken(token string) (int64, bool) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return 0, false
+	}
+	if h.signature(decodeSeg(parts[0]), decodeSeg(parts[1])) != parts[2] {
+		return 0, false
+	}
+	payload := decodeSeg(parts[1])
+	uid := extractInt(payload, "user_id")
+	exp := extractInt(payload, "exp")
+	if exp > 0 && time.Now().Unix() > exp {
+		return 0, false
+	}
+	return uid, true
+}
+
+func (h *Handler) signature(header, payload string) string {
+	sum := sha256.Sum256([]byte(header + "." + payload + "." + string(h.jwtKey)))
+	return hex.EncodeToString(sum[:])
+}
+
+func (h *Handler) currentUserID(c *gin.Context) (int64, bool) {
+	auth := c.GetHeader("Authorization")
+	tok := strings.TrimPrefix(auth, "Bearer ")
+	uid, ok := h.parseToken(tok)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return 0, false
+	}
+	return uid, true
+}
+
+func hashPassword(plain string) string {
+	sum := sha256.Sum256([]byte(plain + "tmall-salt"))
+	return hex.EncodeToString(sum[:])
+}
+
+// ---- Auth ----
+
+func (h *Handler) Login(c *gin.Context) {
+	var req model.LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "用户名和密码必填"})
+		return
+	}
+	u, err := h.User.FindByUsername(req.Username)
+	if err != nil || u == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
+		return
+	}
+	if u.Password != req.Password && u.Password != hashPassword(req.Password) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"token": h.signToken(u.ID, u.Username), "user": u})
+}
+
+func (h *Handler) Register(c *gin.Context) {
+	var req model.RegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数不合法"})
+		return
+	}
+	if h.User.Exists(req.Username) {
+		c.JSON(http.StatusConflict, gin.H{"error": "用户名已存在"})
+		return
+	}
+	u := &model.User{Username: req.Username, Password: hashPassword(req.Password), Nickname: req.Nickname}
+	if u.Nickname == "" {
+		u.Nickname = req.Username
+	}
+	u.Avatar = "https://api.dicebear.com/7.x/avataaars/svg?seed=" + req.Username
+	if err := h.User.Create(u); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "注册失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"token": h.signToken(u.ID, u.Username), "user": u})
+}
+
+func (h *Handler) Profile(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	u, err := h.User.Get(uid)
+	if err != nil || u == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
+		return
+	}
+	count, _ := h.Cart.Count(uid)
+	c.JSON(http.StatusOK, gin.H{"user": u, "cart_count": count})
+}

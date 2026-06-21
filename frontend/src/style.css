@@ -1,0 +1,16 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+  background: #f5f5f5;
+  color: #333;
+  -webkit-font-smoothing: antialiased;
+}
+/* Tmall brand red-orange */
+.tm-red { color: #ff0036; }
+.tm-bg { background: #ff0036; }
+.price { color: #ff0036; font-weight: bold; }
+img { display: block; }
+ul, li { list-style: none; }
+a { text-decoration: none; color: inherit; }
+.app-wrap { max-width: 750px; margin: 0 auto; min-height: 100vh; background: #f5f5f5; padding-bottom: 50px; }
+.genuine-tag { color: #ff0036; font-size: 11px; border: 1px solid #ff0036; padding: 0 4px; border-radius: 3px; }
