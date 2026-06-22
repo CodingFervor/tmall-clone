@@ -9,12 +9,16 @@ A Tmall.com (天猫) clone — full-stack mobile e-commerce emphasizing **brand 
 - **Brand Pavilion (品牌馆)** — browse all flagship stores with follower counts
 - **Brand Store (旗舰店)** — per-brand page with shop header + product grid
 - **Category browsing** — sidebar category tree
-- **Product detail** — gallery, brand link, genuine guarantee, reviews with rating
+- **Product detail** — gallery, brand link, genuine guarantee, **SKU spec selector**, reviews with rating + photo upload
 - **Shopping cart** — select/quantity/totals
-- **Orders** — place order, pay, order history
+- **Sandbox payment** — cashier page (Alipay default/WeChat/UnionPay), confirmation callback, order status machine
+- **Shipment tracking** — 天猫超市配送 + 菜鸟驿站 trajectory, advance through in_transit→delivered, logistics timeline
+- **After-sale refunds** — apply from orders, status tracking, admin approval
+- **Coupon marketing** — coupon center with 满666 (满减) + 折扣 types; 4 seeded Tmall coupons
+- **FTS5 full-text search** — SQLite FTS5 product search with auto-complete suggestions
+- **Image upload** — real multipart upload for product images (admin) + review photos
 - **Auth** — register/login with JWT, profile
-- **Search** — keyword + history + hot terms
-- **Admin panel** — product CRUD with brand assignment
+- **Admin panel** — product CRUD with brand assignment + SKU management + image upload
 
 ### Tech Stack
 - **Backend**: Go 1.22 + Gin + SQLite (`modernc.org/sqlite`, pure-Go, CGO-free)
@@ -68,12 +72,16 @@ MIT — see [LICENSE](LICENSE).
 - **品牌馆** — 浏览全部旗舰店，含粉丝数
 - **旗舰店** — 品牌专属页，含店铺头图 + 商品列表
 - **分类** — 侧边分类树 + 商品列表
-- **商品详情** — 图册、品牌链接、正品保障、带评分评价
+- **商品详情** — 图册、品牌链接、正品保障、**SKU 规格选择**、带评分评价 + 晒图上传
 - **购物车** — 勾选/改量/合计
-- **订单** — 下单、付款、订单列表
-- **登录注册** — JWT 鉴权、个人中心
-- **搜索** — 关键词 + 历史 + 热门词
-- **管理后台** — 商品增删改查（含品牌归属）
+- **沙箱支付** — 收银台（默认支付宝/微信/银联）、支付确认回调、订单状态机
+- **物流跟踪** — 天猫超市配送 + 菜鸟驿站轨迹、物流时间线页面
+- **售后退货** — 订单页申请退款、状态跟踪、管理员审核
+- **优惠券营销** — 领券中心（满减券 + 折扣券）、预置 4 张天猫优惠券
+- **FTS5 全文搜索** — 商品搜索 + 输入联想
+- **图片上传** — 商品图片 + 评价晒图真实上传
+- **登录注册** — JWT 鉴权、个人中心含售后/优惠券入口
+- **管理后台** — 商品增删改查（含品牌归属）+ SKU 管理 + 图片上传
 
 ### 技术栈
 - **后端**：Go 1.22 + Gin + SQLite（`modernc.org/sqlite` 纯 Go 驱动，CGO-free）
