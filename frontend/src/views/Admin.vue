@@ -1,7 +1,21 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { showToast, showSuccessToast, showDialog } from 'vant'
-import { getProducts, adminCreateProduct, adminUpdateProduct, adminDeleteProduct, getCategories, getBrands } from '../api'
+import { getProducts, adminCreateProduct, adminUpdateProduct, adminDeleteProduct, getCategories, getBrands, uploadImage } from '../api'
+
+const uploadingImg = ref(false)
+async function onUploadMainImage(item) {
+  uploadingImg.value = true
+  try {
+    const res = await uploadImage(item.file)
+    form.value.image = res.url
+    showToast('图片已上传')
+  } catch (e) {
+    showToast(e.response?.data?.error || '上传失败')
+  } finally {
+    uploadingImg.value = false
+  }
+}
 
 const products = ref([])
 const categories = ref([])
@@ -67,7 +81,14 @@ function fmt(n) { return Number(n).toFixed(2) }
           <van-field v-model="form.subtitle" label="副标题" placeholder="卖点" />
           <van-field v-model="form.price" type="number" label="价格" placeholder="0.00" />
           <van-field v-model="form.original_price" type="number" label="原价" placeholder="0.00" />
-          <van-field v-model="form.image" label="主图URL" placeholder="图片地址" />
+          <van-field label="商品主图" :loading="uploadingImg">
+            <template #input>
+              <van-uploader :after-read="onUploadMainImage" accept="image/*" max-count="1" :preview-image="false">
+                <van-button icon="photo-o" size="small" round color="#ff0036">上传图片</van-button>
+              </van-uploader>
+              <van-image v-if="form.image" width="60" height="60" radius="6" :src="form.image" fit="cover" style="margin-left: 8px" />
+            </template>
+          </van-field>
           <van-field v-model="form.shop" label="店铺" placeholder="旗舰店名称" />
           <van-field v-model="form.brand_name" label="品牌名" placeholder="品牌旗舰店" />
           <van-field v-model="form.stock" type="digit" label="库存" placeholder="999" />

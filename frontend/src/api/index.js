@@ -37,6 +37,14 @@ export const getOrders = () => http.get('/orders').then((r) => r.data.data)
 export const createOrder = (payload) => http.post('/orders', payload).then((r) => r.data.data)
 export const payOrder = (id) => http.post(`/orders/${id}/pay`).then((r) => r.data)
 export const createReview = (payload) => http.post('/reviews', payload).then((r) => r.data.data)
+
+// ---- Image upload (multipart) ----
+export const uploadImage = (file) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  return http.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 30000 }).then((r) => r.data)
+}
+
 export const adminCreateProduct = (payload) => http.post('/admin/products', payload).then((r) => r.data)
 export const adminUpdateProduct = (id, payload) => http.put(`/admin/products/${id}`, payload).then((r) => r.data)
 export const adminDeleteProduct = (id) => http.delete(`/admin/products/${id}`).then((r) => r.data)
