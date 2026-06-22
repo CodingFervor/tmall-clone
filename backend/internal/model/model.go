@@ -127,6 +127,44 @@ type Payment struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
+// Refund is an after-sale return/refund request.
+type Refund struct {
+	ID        int64     `json:"id"`
+	OrderID   int64     `json:"order_id"`
+	UserID    int64     `json:"user_id"`
+	Reason    string    `json:"reason"`
+	Type      string    `json:"type"`
+	Amount    float64   `json:"amount"`
+	Status    string    `json:"status"`
+	AdminNote string    `json:"admin_note"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// Coupon is a discount coupon template.
+type Coupon struct {
+	ID           int64   `json:"id"`
+	Title        string  `json:"title"`
+	CouponType   string  `json:"coupon_type"`
+	Threshold    float64 `json:"threshold"`
+	Value        float64 `json:"value"`
+	TotalCount   int     `json:"total_count"`
+	ClaimedCount int     `json:"claimed_count"`
+	StartDate    string  `json:"start_date"`
+	EndDate      string  `json:"end_date"`
+	Status       string  `json:"status"`
+	IsClaimed    bool    `json:"is_claimed"`
+}
+
+// UserCoupon is a user's claimed coupon.
+type UserCoupon struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	CouponID  int64     `json:"coupon_id"`
+	IsUsed    int       `json:"is_used"`
+	Coupon    *Coupon   `json:"coupon"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // ---- Request DTOs ----
 
 type LoginRequest struct {

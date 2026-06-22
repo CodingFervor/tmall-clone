@@ -26,6 +26,8 @@ type Handler struct {
 	SKU      *repository.SKURepo
 	Payment  *repository.PaymentRepo
 	Shipment *repository.ShipmentRepo
+	Refund   *repository.RefundRepo
+	Coupon   *repository.CouponRepo
 	jwtKey   []byte
 }
 
@@ -64,11 +66,14 @@ func (h *Handler) signature(header, payload string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (h *Handler) currentUserID(c *gin.Context) (int64, bool) {
+func (h *Handler) currentUserID(c *gin.Context, optional ...bool) (int64, bool) {
 	auth := c.GetHeader("Authorization")
 	tok := strings.TrimPrefix(auth, "Bearer ")
 	uid, ok := h.parseToken(tok)
 	if !ok {
+		if len(optional) > 0 && optional[0] {
+			return 0, true
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return 0, false
 	}

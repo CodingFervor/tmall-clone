@@ -14,6 +14,8 @@ const routes = [
   { path: '/orders', name: 'orders', component: () => import('../views/Orders.vue'), meta: { auth: true } },
   { path: '/pay', name: 'pay', component: () => import('../views/Pay.vue'), meta: { auth: true } },
   { path: '/logistics', name: 'logistics', component: () => import('../views/Logistics.vue'), meta: { auth: true } },
+  { path: '/refunds', name: 'refunds', component: () => import('../views/Refunds.vue'), meta: { auth: true } },
+  { path: '/coupons', name: 'coupons', component: () => import('../views/Coupons.vue') },
   { path: '/admin', name: 'admin', component: () => import('../views/Admin.vue') },
 ]
 

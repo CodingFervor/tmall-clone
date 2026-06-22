@@ -129,5 +129,24 @@ func Run(db *sql.DB) {
 		}
 	}
 
+	// Seed coupons.
+	var couponCount int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM coupons`).Scan(&couponCount)
+	if couponCount == 0 {
+		coupons := []model.Coupon{
+			{Title: "天猫超市满99减15", CouponType: "deduct", Threshold: 99, Value: 15, TotalCount: 1000, StartDate: "2026-01-01", EndDate: "2026-12-31"},
+			{Title: "国际美妆满500减50", CouponType: "deduct", Threshold: 500, Value: 50, TotalCount: 500, StartDate: "2026-01-01", EndDate: "2026-12-31"},
+			{Title: "服饰鞋包9折券", CouponType: "discount", Threshold: 0, Value: 0.9, TotalCount: 300, StartDate: "2026-01-01", EndDate: "2026-12-31"},
+			{Title: "数码家电满3000减300", CouponType: "deduct", Threshold: 3000, Value: 300, TotalCount: 200, StartDate: "2026-01-01", EndDate: "2026-12-31"},
+		}
+		for _, cp := range coupons {
+			_, _ = db.Exec(`INSERT INTO coupons (title, coupon_type, threshold, value, total_count, start_date, end_date, status) VALUES (?,?,?,?,?,?,?,?)`,
+				cp.Title, cp.CouponType, cp.Threshold, cp.Value, cp.TotalCount, cp.StartDate, cp.EndDate, "active")
+		}
+	}
+
+	// Rebuild FTS5 index for existing products.
+	_, _ = db.Exec(`INSERT INTO products_fts(products_fts) VALUES('rebuild')`)
+
 	log.Println("seed: tmall mock data ensured")
 }
