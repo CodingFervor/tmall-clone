@@ -40,6 +40,11 @@ func main() {
 		repository.NewOrderRepo(db.DB),
 		repository.NewReviewRepo(db.DB),
 	)
+	h.SetEnhance(
+		repository.NewSKURepo(db.DB),
+		repository.NewPaymentRepo(db.DB),
+		repository.NewShipmentRepo(db.DB),
+	)
 
 	r := server.New(h, cfg.AllowedOrigins)
 	addr := ":" + strconv.Itoa(cfg.Port)

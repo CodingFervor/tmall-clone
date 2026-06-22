@@ -26,6 +26,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 		api.GET("/products", h.ListProducts)
 		api.GET("/products/:id", h.GetProduct)
 		api.GET("/products/:id/reviews", h.ListReviews)
+		api.GET("/products/:id/skus", h.ListSKUs)
+
+		api.GET("/shipments/track", h.TrackByNo)
 
 		auth := api.Group("/")
 		auth.Use(authMiddleware())
@@ -41,11 +44,22 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 			auth.POST("/orders", h.CreateOrder)
 			auth.POST("/orders/:id/pay", h.PayOrder)
 
+			// Payment flow (sandbox)
+			auth.POST("/payments", h.CreatePayment)
+			auth.POST("/payments/:id/confirm", h.ConfirmPayment)
+			auth.GET("/payments/order/:id", h.GetPayment)
+
+			// Shipment flow
+			auth.POST("/orders/:id/ship", h.ShipOrder)
+			auth.GET("/orders/:id/track", h.TrackOrder)
+			auth.POST("/orders/:id/ship/advance", h.AdvanceShipment)
+
 			auth.POST("/reviews", h.CreateReview)
 
 			auth.POST("/admin/products", h.AdminCreateProduct)
 			auth.PUT("/admin/products/:id", h.AdminUpdateProduct)
 			auth.DELETE("/admin/products/:id", h.AdminDeleteProduct)
+			auth.POST("/admin/products/:id/skus", h.CreateSKU)
 		}
 	}
 	return r

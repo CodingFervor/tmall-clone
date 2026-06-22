@@ -73,7 +73,8 @@ func (h *Handler) GetProduct(c *gin.Context) {
 		return
 	}
 	reviews, _ := h.Review.ListByProduct(id)
-	c.JSON(http.StatusOK, gin.H{"data": p, "reviews": reviews})
+	skus := h.SKUsForProduct(id)
+	c.JSON(http.StatusOK, gin.H{"data": p, "reviews": reviews, "skus": skus})
 }
 
 // ---- Cart ----

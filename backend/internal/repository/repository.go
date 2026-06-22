@@ -341,6 +341,24 @@ func (r *OrderRepo) Create(o *model.Order) error {
 	return nil
 }
 
+// Get loads a single order; userID>0 enforces ownership.
+func (r *OrderRepo) Get(id, userID int64) (*model.Order, error) {
+	o := &model.Order{}
+	err := r.db.QueryRow(
+		`SELECT id, user_id, order_no, total, status, items_json, address, created_at FROM orders WHERE id=?`, id,
+	).Scan(&o.ID, &o.UserID, &o.OrderNo, &o.Total, &o.Status, &o.ItemsJSON, &o.Address, &o.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if userID > 0 && o.UserID != userID {
+		return nil, nil
+	}
+	return o, nil
+}
+
 func (r *OrderRepo) ListByUser(userID int64) ([]model.Order, error) {
 	rows, err := r.db.Query(
 		`SELECT id, user_id, order_no, total, status, items_json, address, created_at

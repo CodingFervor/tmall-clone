@@ -106,5 +106,28 @@ func Run(db *sql.DB) {
 		}
 	}
 
+	// Seed SKUs for flagship products (color/spec variants).
+	var skuCount int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM skus`).Scan(&skuCount)
+	if skuCount == 0 {
+		skus := []model.SKU{
+			// 雅诗兰黛小棕瓶 (product 1)
+			{ProductID: 1, Spec: `{"规格":"50ml"}`, SpecText: "50ml 经典装", Price: 1080, Stock: 200, SKUCode: "EL-50"},
+			{ProductID: 1, Spec: `{"规格":"100ml"}`, SpecText: "100ml 超值装", Price: 1880, Stock: 100, SKUCode: "EL-100"},
+			// iPhone 15 Pro (product 5)
+			{ProductID: 5, Spec: `{"颜色":"蓝色钛金属","存储":"256GB"}`, SpecText: "蓝色钛金属 256GB", Price: 7999, Stock: 150, SKUCode: "IP15P-BL-256"},
+			{ProductID: 5, Spec: `{"颜色":"蓝色钛金属","存储":"512GB"}`, SpecText: "蓝色钛金属 512GB", Price: 8999, Stock: 120, SKUCode: "IP15P-BL-512"},
+			{ProductID: 5, Spec: `{"颜色":"原色钛金属","存储":"256GB"}`, SpecText: "原色钛金属 256GB", Price: 7999, Stock: 180, SKUCode: "IP15P-ND-256"},
+			// AJ1 (product 8)
+			{ProductID: 8, Spec: `{"颜色":"黑红","尺码":"42"}`, SpecText: "黑红 42码", Price: 1599, Stock: 60, SKUCode: "AJ1-BR-42"},
+			{ProductID: 8, Spec: `{"颜色":"黑红","尺码":"43"}`, SpecText: "黑红 43码", Price: 1599, Stock: 50, SKUCode: "AJ1-BR-43"},
+			{ProductID: 8, Spec: `{"颜色":"白色","尺码":"42"}`, SpecText: "白色 42码", Price: 1599, Stock: 70, SKUCode: "AJ1-WH-42"},
+		}
+		for _, s := range skus {
+			_, _ = db.Exec(`INSERT INTO skus (product_id, spec, spec_text, price, stock, sku_code) VALUES (?,?,?,?,?,?)`,
+				s.ProductID, s.Spec, s.SpecText, s.Price, s.Stock, s.SKUCode)
+		}
+	}
+
 	log.Println("seed: tmall mock data ensured")
 }

@@ -84,6 +84,49 @@ type Review struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// SKU is a specific spec combination of a product.
+type SKU struct {
+	ID        int64   `json:"id"`
+	ProductID int64   `json:"product_id"`
+	Spec      string  `json:"spec"`
+	SpecText  string  `json:"spec_text"`
+	Price     float64 `json:"price"`
+	Stock     int     `json:"stock"`
+	SKUCode   string  `json:"sku_code"`
+}
+
+// Shipment is a shipped order's logistics envelope.
+type Shipment struct {
+	ID         int64     `json:"id"`
+	OrderID    int64     `json:"order_id"`
+	TrackingNo string    `json:"tracking_no"`
+	Carrier    string    `json:"carrier"`
+	Status     string    `json:"status"`
+	Tracks     []Track   `json:"tracks"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// Track is one logistics event.
+type Track struct {
+	ID          int64     `json:"id"`
+	ShipmentID  int64     `json:"shipment_id"`
+	Description string    `json:"description"`
+	Location    string    `json:"location"`
+	OccurredAt  time.Time `json:"occurred_at"`
+}
+
+// Payment records a payment attempt for an order.
+type Payment struct {
+	ID            int64     `json:"id"`
+	OrderID       int64     `json:"order_id"`
+	UserID        int64     `json:"user_id"`
+	Amount        float64   `json:"amount"`
+	Method        string    `json:"method"`
+	TransactionNo string    `json:"transaction_no"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 // ---- Request DTOs ----
 
 type LoginRequest struct {

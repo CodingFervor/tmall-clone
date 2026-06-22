@@ -9,7 +9,8 @@ const orders = ref([])
 const loading = ref(true)
 
 onMounted(async () => { try { orders.value = await getOrders() } catch (e) { showToast('加载失败') } finally { loading.value = false } })
-async function pay(o) { try { await payOrder(o.id); o.status = 'paid'; showSuccessToast('支付成功') } catch (e) { showToast('支付失败') } }
+function pay(o) { router.push({ name: 'pay', query: { order_id: o.id } }) }
+function viewLogistics(o) { router.push({ name: 'logistics', query: { order_id: o.id } }) }
 function statusText(s) { return { pending: '待付款', paid: '已付款', shipped: '已发货', completed: '已完成', cancelled: '已取消' }[s] || s }
 function fmt(n) { return Number(n).toFixed(2) }
 function parseItems(json) { try { return JSON.parse(json) } catch { return [] } }
@@ -27,7 +28,13 @@ function parseItems(json) { try { return JSON.parse(json) } catch { return [] } 
           <van-image width="60" height="60" radius="6" :src="it.image" fit="cover" />
           <div class="oi-info"><div class="oi-name van-ellipsis">{{ it.name }}</div><div class="oi-price">¥{{ fmt(it.price) }} × {{ it.quantity }}</div></div>
         </div>
-        <div class="o-foot"><span>共 {{ parseItems(o.items_json).length }} 件 合计: <b class="price">¥{{ fmt(o.total) }}</b></span><van-button v-if="o.status === 'pending'" size="small" type="danger" round @click="pay(o)">立即付款</van-button></div>
+        <div class="o-foot">
+          <span>共 {{ parseItems(o.items_json).length }} 件 合计: <b class="price">¥{{ fmt(o.total) }}</b></span>
+          <div class="o-actions">
+            <van-button v-if="o.status === 'pending'" size="small" type="danger" round @click="pay(o)">去支付</van-button>
+            <van-button v-if="o.status === 'paid' || o.status === 'shipped' || o.status === 'completed'" size="small" plain type="danger" round @click="viewLogistics(o)">查看物流</van-button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -44,4 +51,5 @@ function parseItems(json) { try { return JSON.parse(json) } catch { return [] } 
 .oi-name { font-size: 13px; }
 .oi-price { color: #999; font-size: 12px; margin-top: 4px; }
 .o-foot { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid #f5f5f5; margin-top: 8px; font-size: 13px; }
+.o-actions { display: flex; gap: 8px; }
 </style>

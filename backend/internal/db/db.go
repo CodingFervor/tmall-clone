@@ -115,6 +115,47 @@ func createTables() error {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id)`,
+		// SKU: a specific spec combination (color/size/version) of a product.
+		`CREATE TABLE IF NOT EXISTS skus (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			product_id INTEGER NOT NULL,
+			spec TEXT NOT NULL,
+			spec_text TEXT NOT NULL DEFAULT '',
+			price REAL NOT NULL,
+			stock INTEGER NOT NULL DEFAULT 0,
+			sku_code TEXT NOT NULL DEFAULT ''
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_skus_product ON skus(product_id)`,
+		// Shipments.
+		`CREATE TABLE IF NOT EXISTS shipments (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			order_id INTEGER NOT NULL,
+			tracking_no TEXT NOT NULL,
+			carrier TEXT NOT NULL DEFAULT '天猫超市配送',
+			status TEXT NOT NULL DEFAULT 'shipped',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_shipments_order ON shipments(order_id)`,
+		`CREATE TABLE IF NOT EXISTS shipment_tracks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			shipment_id INTEGER NOT NULL,
+			description TEXT NOT NULL,
+			location TEXT NOT NULL DEFAULT '',
+			occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_tracks_shipment ON shipment_tracks(shipment_id)`,
+		// Payments.
+		`CREATE TABLE IF NOT EXISTS payments (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			order_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			amount REAL NOT NULL,
+			method TEXT NOT NULL DEFAULT 'alipay',
+			transaction_no TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'pending',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id)`,
 	}
 	for _, s := range stmts {
 		if _, err := DB.Exec(s); err != nil {

@@ -8,6 +8,8 @@ const route = useRoute()
 const router = useRouter()
 const product = ref(null)
 const reviews = ref([])
+const skus = ref([])
+const selectedSKU = ref(null)
 const loading = ref(true)
 const showReview = ref(false)
 const reviewRating = ref(5)
@@ -18,6 +20,7 @@ onMounted(async () => {
     const res = await getProduct(route.params.id)
     product.value = res.data
     reviews.value = res.reviews || []
+    skus.value = res.skus || []
   } catch (e) {
     showToast('商品不存在')
   } finally {
@@ -44,6 +47,8 @@ async function submitReview() {
     reviews.value.unshift(rv); showReview.value = false; reviewContent.value = ''; showSuccessToast('评价成功')
   } catch (e) { showToast('请先登录') }
 }
+function selectSKU(sku) { selectedSKU.value = sku }
+function currentPrice() { return selectedSKU.value ? selectedSKU.value.price : (product.value ? product.value.price : 0) }
 function fmt(n) { return Number(n).toFixed(2) }
 </script>
 
@@ -53,8 +58,14 @@ function fmt(n) { return Number(n).toFixed(2) }
     <van-nav-bar title="商品详情" left-arrow @click-left="router.back()" fixed placeholder />
     <van-image width="100%" height="375" :src="product.image" fit="cover" />
     <div class="price-block">
-      <span class="big-price">¥{{ fmt(product.price) }}</span>
+      <span class="big-price">¥{{ fmt(currentPrice()) }}</span>
       <span class="origin">¥{{ fmt(product.original_price) }}</span>
+    </div>
+    <div v-if="skus.length" class="sku-block">
+      <div class="sku-title">已选：<b>{{ selectedSKU ? selectedSKU.spec_text : '请选择规格' }}</b></div>
+      <div class="sku-tags">
+        <span v-for="s in skus" :key="s.id" class="sku-tag" :class="{ active: selectedSKU && selectedSKU.id === s.id }" @click="selectSKU(s)">{{ s.spec_text }} <small>¥{{ fmt(s.price) }}</small></span>
+      </div>
     </div>
     <div class="title-block">
       <div v-if="product.is_genuine" class="genuine-row"><span class="genuine-tag">正品保障</span> <span class="brand-link" v-if="product.brand_id" @click="router.push('/brand/' + product.brand_id)">{{ product.brand_name }} ›</span></div>
@@ -99,6 +110,13 @@ function fmt(n) { return Number(n).toFixed(2) }
 .price-block { padding: 12px 16px; background: #fff; }
 .big-price { color: #ff0036; font-size: 28px; font-weight: bold; }
 .origin { color: #999; text-decoration: line-through; margin-left: 10px; font-size: 14px; }
+.sku-block { padding: 12px 16px; background: #fff; border-top: 1px solid #f5f5f5; }
+.sku-title { font-size: 13px; color: #666; margin-bottom: 8px; }
+.sku-title b { color: #333; }
+.sku-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.sku-tag { padding: 6px 12px; background: #f7f7f7; border: 1px solid #eee; border-radius: 16px; font-size: 13px; color: #333; }
+.sku-tag.active { background: #fff5f6; border-color: #ff0036; color: #ff0036; }
+.sku-tag small { color: #ff0036; margin-left: 4px; }
 .title-block { padding: 0 16px 12px; background: #fff; }
 .genuine-row { margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
 .brand-link { color: #ff0036; font-size: 12px; }
