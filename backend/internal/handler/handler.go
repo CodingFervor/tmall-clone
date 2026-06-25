@@ -28,12 +28,20 @@ type Handler struct {
 	Shipment *repository.ShipmentRepo
 	Refund   *repository.RefundRepo
 	Coupon   *repository.CouponRepo
+	Address  *repository.AddressRepo
+	Favorite *repository.FavoriteRepo
 	jwtKey   []byte
 }
 
 func New(jwtSecret string, u *repository.UserRepo, b *repository.BrandRepo, c *repository.CategoryRepo, p *repository.ProductRepo,
 	ca *repository.CartRepo, o *repository.OrderRepo, r *repository.ReviewRepo) *Handler {
 	return &Handler{User: u, Brand: b, Cat: c, Product: p, Cart: ca, Order: o, Review: r, jwtKey: []byte(jwtSecret)}
+}
+
+// SetUserExtra attaches the address + favorite (wishlist) repos.
+func (h *Handler) SetUserExtra(addr *repository.AddressRepo, fav *repository.FavoriteRepo) {
+	h.Address = addr
+	h.Favorite = fav
 }
 
 // ---- JWT (HS256, hand-rolled) ----

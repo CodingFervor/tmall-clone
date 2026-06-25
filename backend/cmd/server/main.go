@@ -49,6 +49,10 @@ func main() {
 		repository.NewRefundRepo(db.DB),
 		repository.NewCouponRepo(db.DB),
 	)
+	h.SetUserExtra(
+		repository.NewAddressRepo(db.DB),
+		repository.NewFavoriteRepo(db.DB),
+	)
 
 	_ = os.MkdirAll("data/images", 0o755)
 

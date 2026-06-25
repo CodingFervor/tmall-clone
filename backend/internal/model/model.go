@@ -8,6 +8,7 @@ type User struct {
 	Password  string    `json:"-"`
 	Nickname  string    `json:"nickname"`
 	Avatar    string    `json:"avatar"`
+	Phone     string    `json:"phone"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -93,6 +94,27 @@ type SKU struct {
 	Price     float64 `json:"price"`
 	Stock     int     `json:"stock"`
 	SKUCode   string  `json:"sku_code"`
+}
+
+// Address is a shipping destination.
+type Address struct {
+	ID        int64  `json:"id"`
+	UserID    int64  `json:"user_id"`
+	Name      string `json:"name"`
+	Phone     string `json:"phone"`
+	Detail    string `json:"detail"`
+	IsDefault int    `json:"is_default"`
+}
+
+// Favorite is a user's favorited product (wishlist entry).
+type Favorite struct {
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	ProductID   int64     `json:"product_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	ProductName string    `json:"product_name"`
+	ProductImg  string    `json:"product_image"`
+	Price       float64   `json:"price"`
 }
 
 // Shipment is a shipped order's logistics envelope.
@@ -201,6 +223,19 @@ type CreateReviewRequest struct {
 	ProductID int64  `json:"product_id" binding:"required"`
 	Rating    int    `json:"rating"`
 	Content   string `json:"content"`
+}
+
+type AddressInput struct {
+	Name      string `json:"name" binding:"required"`
+	Phone     string `json:"phone" binding:"required"`
+	Detail    string `json:"detail" binding:"required"`
+	IsDefault int    `json:"is_default"`
+}
+
+type ProfileInput struct {
+	Nickname string `json:"nickname"`
+	Avatar   string `json:"avatar"`
+	Phone    string `json:"phone"`
 }
 
 type ProductInput struct {

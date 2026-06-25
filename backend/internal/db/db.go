@@ -46,6 +46,7 @@ func createTables() error {
 			password TEXT NOT NULL,
 			nickname TEXT NOT NULL DEFAULT '',
 			avatar TEXT NOT NULL DEFAULT '',
+			phone TEXT NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS brands (
@@ -192,6 +193,25 @@ func createTables() error {
 			UNIQUE(user_id, coupon_id)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_coupons_user ON user_coupons(user_id)`,
+		// Favorites: products a user has favorited (wishlist).
+		`CREATE TABLE IF NOT EXISTS favorites (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			product_id INTEGER NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, product_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id)`,
+		// Addresses: shipping destinations.
+		`CREATE TABLE IF NOT EXISTS addresses (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			name TEXT NOT NULL,
+			phone TEXT NOT NULL,
+			detail TEXT NOT NULL,
+			is_default INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_addresses_user ON addresses(user_id)`,
 		// FTS5.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		`CREATE TRIGGER IF NOT EXISTS products_ai AFTER INSERT ON products BEGIN
@@ -214,5 +234,14 @@ func createTables() error {
 			return fmt.Errorf("exec: %w", err)
 		}
 	}
+	return migrate()
+}
+
+// migrate applies additive schema changes for databases created before a
+// feature shipped. Each step is best-effort and idempotent (errors from a
+// duplicate add-column are ignored).
+func migrate() error {
+	// Add phone column to users (added after launch).
+	_, _ = DB.Exec(`ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''`)
 	return nil
 }
