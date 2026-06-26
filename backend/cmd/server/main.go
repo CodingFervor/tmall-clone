@@ -53,6 +53,7 @@ func main() {
 		repository.NewAddressRepo(db.DB),
 		repository.NewFavoriteRepo(db.DB),
 	)
+	h.SetHistory(repository.NewHistoryRepo(db.DB), repository.NewCheckInRepo(db.DB))
 
 	_ = os.MkdirAll("data/images", 0o755)
 

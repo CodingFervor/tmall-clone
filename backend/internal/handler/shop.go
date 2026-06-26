@@ -74,6 +74,12 @@ func (h *Handler) GetProduct(c *gin.Context) {
 	}
 	reviews, _ := h.Review.ListByProduct(id)
 	skus := h.SKUsForProduct(id)
+	// Record the view in the user's browse history (best-effort).
+	if h.History != nil {
+		if uid, ok := h.currentUserID(c, true); ok {
+			_ = h.History.RecordView(uid, id)
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{"data": p, "reviews": reviews, "skus": skus})
 }
 

@@ -30,6 +30,8 @@ type Handler struct {
 	Coupon   *repository.CouponRepo
 	Address  *repository.AddressRepo
 	Favorite *repository.FavoriteRepo
+	History  *repository.HistoryRepo
+	CheckIn  *repository.CheckInRepo
 	jwtKey   []byte
 }
 
@@ -42,6 +44,12 @@ func New(jwtSecret string, u *repository.UserRepo, b *repository.BrandRepo, c *r
 func (h *Handler) SetUserExtra(addr *repository.AddressRepo, fav *repository.FavoriteRepo) {
 	h.Address = addr
 	h.Favorite = fav
+}
+
+// SetHistory attaches the browse-history + check-in repos.
+func (h *Handler) SetHistory(hist *repository.HistoryRepo, ci *repository.CheckInRepo) {
+	h.History = hist
+	h.CheckIn = ci
 }
 
 // ---- JWT (HS256, hand-rolled) ----

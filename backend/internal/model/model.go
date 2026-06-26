@@ -117,6 +117,26 @@ type Favorite struct {
 	Price       float64   `json:"price"`
 }
 
+// History is a browse-history entry (a product the user recently viewed).
+type History struct {
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	ProductID   int64     `json:"product_id"`
+	ViewedAt    time.Time `json:"viewed_at"`
+	ProductName string    `json:"product_name"`
+	ProductImg  string    `json:"product_image"`
+	Price       float64   `json:"price"`
+}
+
+// CheckIn is a daily check-in record (积分/连续签到).
+type CheckIn struct {
+	ID        int64  `json:"id"`
+	UserID    int64  `json:"user_id"`
+	CheckDate string `json:"check_date"`
+	Streak    int    `json:"streak"`
+	Points    int    `json:"points"`
+}
+
 // Shipment is a shipped order's logistics envelope.
 type Shipment struct {
 	ID         int64     `json:"id"`

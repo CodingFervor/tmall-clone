@@ -212,6 +212,26 @@ func createTables() error {
 			is_default INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_addresses_user ON addresses(user_id)`,
+		// Browse history: products a logged-in user has viewed (recent first).
+		`CREATE TABLE IF NOT EXISTS browse_history (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			product_id INTEGER NOT NULL,
+			viewed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, product_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_history_user ON browse_history(user_id)`,
+		// Daily check-ins: one row per user per day (积分/奖励 demo).
+		`CREATE TABLE IF NOT EXISTS check_ins (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			check_date TEXT NOT NULL,
+			streak INTEGER NOT NULL DEFAULT 1,
+			points INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, check_date)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_checkins_user ON check_ins(user_id)`,
 		// FTS5.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		`CREATE TRIGGER IF NOT EXISTS products_ai AFTER INSERT ON products BEGIN
