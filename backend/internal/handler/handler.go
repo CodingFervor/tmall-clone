@@ -32,6 +32,7 @@ type Handler struct {
 	Favorite *repository.FavoriteRepo
 	History  *repository.HistoryRepo
 	CheckIn  *repository.CheckInRepo
+	Shop     *repository.PointShopRepo
 	jwtKey   []byte
 }
 
@@ -46,10 +47,11 @@ func (h *Handler) SetUserExtra(addr *repository.AddressRepo, fav *repository.Fav
 	h.Favorite = fav
 }
 
-// SetHistory attaches the browse-history + check-in repos.
-func (h *Handler) SetHistory(hist *repository.HistoryRepo, ci *repository.CheckInRepo) {
+// SetHistory attaches the browse-history + check-in + points-mall repos.
+func (h *Handler) SetHistory(hist *repository.HistoryRepo, ci *repository.CheckInRepo, shop *repository.PointShopRepo) {
 	h.History = hist
 	h.CheckIn = ci
+	h.Shop = shop
 }
 
 // ---- JWT (HS256, hand-rolled) ----

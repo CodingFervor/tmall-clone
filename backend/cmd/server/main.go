@@ -53,7 +53,10 @@ func main() {
 		repository.NewAddressRepo(db.DB),
 		repository.NewFavoriteRepo(db.DB),
 	)
-	h.SetHistory(repository.NewHistoryRepo(db.DB), repository.NewCheckInRepo(db.DB))
+	// Attach the browse-history + check-in + points-mall repos.
+	shopRepo := repository.NewPointShopRepo(db.DB)
+	shopRepo.SeedPointShop()
+	h.SetHistory(repository.NewHistoryRepo(db.DB), repository.NewCheckInRepo(db.DB), shopRepo)
 
 	_ = os.MkdirAll("data/images", 0o755)
 

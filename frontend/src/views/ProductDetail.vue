@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showDialog } from 'vant'
-import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite } from '../api'
+import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -65,6 +65,16 @@ async function submitReview() {
     reviews.value.unshift(rv); showReview.value = false; reviewContent.value = ''; reviewImages.value = []; showSuccessToast('评价成功')
   } catch (e) { showToast('请先登录') }
 }
+const replyingTo = ref(null)
+const replyText = ref('')
+function toggleReply(r) { replyingTo.value = replyingTo.value === r.id ? null : r.id; replyText.value = '' }
+async function submitReply(r) {
+  if (!replyText.value.trim()) { showToast('请输入回复内容'); return }
+  try {
+    const rep = await replyReview(r.id, replyText.value)
+    r.reply = rep; replyingTo.value = null; replyText.value = ''; showSuccessToast('回复成功')
+  } catch (e) { showToast('请先登录') }
+}
 function selectSKU(sku) { selectedSKU.value = sku }
 function currentPrice() { return selectedSKU.value ? selectedSKU.value.price : (product.value ? product.value.price : 0) }
 function fmt(n) { return Number(n).toFixed(2) }
@@ -100,8 +110,13 @@ function fmt(n) { return Number(n).toFixed(2) }
     <div class="reviews">
       <div class="rev-head"><span>商品评价 ({{ reviews.length }})</span><van-button size="mini" type="danger" plain @click="showReview = true">写评价</van-button></div>
       <div v-for="r in reviews" :key="r.id" class="rev-item">
-        <div class="rev-user"><span>{{ r.username }}</span><van-rate v-model="r.rating" readonly size="12" /></div>
+        <div class="rev-user"><span>{{ r.username }}</span><van-rate v-model="r.rating" readonly size="12" /><span class="rev-reply-btn" @click="toggleReply(r)">回复</span></div>
         <div class="rev-content">{{ r.content }}</div>
+        <div v-if="r.reply" class="rev-reply"><span class="rev-reply-name">{{ r.reply.username }}：</span>{{ r.reply.content }}</div>
+        <div v-if="replyingTo === r.id" class="rev-reply-box">
+          <van-field v-model="replyText" placeholder="写下你的回复..." />
+          <van-button size="small" type="danger" @click="submitReply(r)">发送</van-button>
+        </div>
       </div>
       <van-empty v-if="!reviews.length" description="暂无评价" />
     </div>
@@ -157,6 +172,11 @@ function fmt(n) { return Number(n).toFixed(2) }
 .rev-item { padding: 10px 0; border-top: 1px solid #f5f5f5; }
 .rev-user { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #666; }
 .rev-content { font-size: 13px; margin-top: 4px; line-height: 18px; }
+.rev-reply-btn { margin-left: auto; color: #ff0036; font-size: 12px; }
+.rev-reply { background: #f7f7f7; border-radius: 6px; padding: 6px 10px; margin-top: 6px; font-size: 12px; color: #666; line-height: 18px; }
+.rev-reply-name { color: #ff0036; }
+.rev-reply-box { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.rev-reply-box .van-field { flex: 1; border: 1px solid #eee; border-radius: 6px; }
 .rev-form { padding: 20px; }
 .rev-form h3 { text-align: center; margin-bottom: 16px; }
 .rev-form .van-field { margin: 12px 0; border: 1px solid #eee; }

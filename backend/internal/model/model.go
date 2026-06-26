@@ -75,13 +75,24 @@ type Order struct {
 }
 
 type Review struct {
+	ID        int64        `json:"id"`
+	ProductID int64        `json:"product_id"`
+	UserID    int64        `json:"user_id"`
+	Username  string       `json:"username"`
+	Rating    int          `json:"rating"`
+	Content   string       `json:"content"`
+	Images    string       `json:"images"`
+	CreatedAt time.Time    `json:"created_at"`
+	Reply     *ReviewReply `json:"reply,omitempty"` // merchant/owner response, if any
+}
+
+// ReviewReply is a response to a buyer review.
+type ReviewReply struct {
 	ID        int64     `json:"id"`
-	ProductID int64     `json:"product_id"`
+	ReviewID  int64     `json:"review_id"`
 	UserID    int64     `json:"user_id"`
 	Username  string    `json:"username"`
-	Rating    int       `json:"rating"`
 	Content   string    `json:"content"`
-	Images    string    `json:"images"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -135,6 +146,27 @@ type CheckIn struct {
 	CheckDate string `json:"check_date"`
 	Streak    int    `json:"streak"`
 	Points    int    `json:"points"`
+}
+
+// PointProduct is a redeemable reward in the points mall (积分商城).
+type PointProduct struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Image     string `json:"image"`
+	Points    int    `json:"points"`
+	Stock     int    `json:"stock"`
+	SortOrder int    `json:"sort_order"`
+}
+
+// Redemption records a user exchanging points for a point product.
+type Redemption struct {
+	ID          int64     `json:"id"`
+	UserID      int64     `json:"user_id"`
+	ProductID   int64     `json:"product_id"`
+	PointsCost  int       `json:"points_cost"`
+	Status      string    `json:"status"`
+	ProductName string    `json:"product_name"` // joined
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // Shipment is a shipped order's logistics envelope.
