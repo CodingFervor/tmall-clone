@@ -57,6 +57,10 @@ func main() {
 	shopRepo := repository.NewPointShopRepo(db.DB)
 	shopRepo.SeedPointShop()
 	h.SetHistory(repository.NewHistoryRepo(db.DB), repository.NewCheckInRepo(db.DB), shopRepo)
+	// Attach + seed the flash-sale (限时秒杀) repo.
+	seckillRepo := repository.NewSeckillRepo(db.DB)
+	seckillRepo.SeedSeckill()
+	h.SetSeckill(seckillRepo)
 
 	_ = os.MkdirAll("data/images", 0o755)
 

@@ -61,7 +61,7 @@ function checkLogin() {
 async function submitReview() {
   if (!reviewContent.value.trim()) { showToast('请输入评价'); return }
   try {
-    const rv = await createReview({ product_id: product.value.id, rating: reviewRating.value, content: reviewContent.value })
+    const rv = await createReview({ product_id: product.value.id, rating: reviewRating.value, content: reviewContent.value, images: reviewImages.value.join(',') })
     reviews.value.unshift(rv); showReview.value = false; reviewContent.value = ''; reviewImages.value = []; showSuccessToast('评价成功')
   } catch (e) { showToast('请先登录') }
 }
@@ -112,6 +112,9 @@ function fmt(n) { return Number(n).toFixed(2) }
       <div v-for="r in reviews" :key="r.id" class="rev-item">
         <div class="rev-user"><span>{{ r.username }}</span><van-rate v-model="r.rating" readonly size="12" /><span class="rev-reply-btn" @click="toggleReply(r)">回复</span></div>
         <div class="rev-content">{{ r.content }}</div>
+        <div v-if="r.images" class="rev-photos">
+          <van-image v-for="(img, i) in r.images.split(',')" :key="i" width="72" height="72" radius="6" :src="img" fit="cover" />
+        </div>
         <div v-if="r.reply" class="rev-reply"><span class="rev-reply-name">{{ r.reply.username }}：</span>{{ r.reply.content }}</div>
         <div v-if="replyingTo === r.id" class="rev-reply-box">
           <van-field v-model="replyText" placeholder="写下你的回复..." />
@@ -172,6 +175,7 @@ function fmt(n) { return Number(n).toFixed(2) }
 .rev-item { padding: 10px 0; border-top: 1px solid #f5f5f5; }
 .rev-user { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #666; }
 .rev-content { font-size: 13px; margin-top: 4px; line-height: 18px; }
+.rev-photos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .rev-reply-btn { margin-left: auto; color: #ff0036; font-size: 12px; }
 .rev-reply { background: #f7f7f7; border-radius: 6px; padding: 6px 10px; margin-top: 6px; font-size: 12px; color: #666; line-height: 18px; }
 .rev-reply-name { color: #ff0036; }

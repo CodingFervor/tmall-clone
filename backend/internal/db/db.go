@@ -261,6 +261,18 @@ func createTables() error {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_replies_review ON review_replies(review_id)`,
+		// Seckill deals: time-boxed flash sales with a separate stock pool (天猫限时秒杀).
+		`CREATE TABLE IF NOT EXISTS seckill_deals (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			product_id INTEGER NOT NULL,
+			seckill_price REAL NOT NULL DEFAULT 0,
+			stock INTEGER NOT NULL DEFAULT 0,
+			sold INTEGER NOT NULL DEFAULT 0,
+			start_time DATETIME NOT NULL,
+			end_time DATETIME NOT NULL,
+			status TEXT NOT NULL DEFAULT 'active'
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_seckill_active ON seckill_deals(status)`,
 		// FTS5.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		`CREATE TRIGGER IF NOT EXISTS products_ai AFTER INSERT ON products BEGIN

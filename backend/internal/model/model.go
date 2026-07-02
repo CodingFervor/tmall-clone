@@ -169,6 +169,22 @@ type Redemption struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// SeckillDeal is a time-boxed flash sale with a separate stock pool.
+type SeckillDeal struct {
+	ID           int64     `json:"id"`
+	ProductID    int64     `json:"product_id"`
+	SeckillPrice float64   `json:"seckill_price"`
+	Stock        int       `json:"stock"`
+	Sold         int       `json:"sold"`
+	StartTime    time.Time `json:"start_time"`
+	EndTime      time.Time `json:"end_time"`
+	Status       string    `json:"status"`
+	// Joined product fields (populated for list responses).
+	ProductName   string  `json:"product_name"`
+	ProductImage  string  `json:"product_image"`
+	OriginalPrice float64 `json:"original_price"`
+}
+
 // Shipment is a shipped order's logistics envelope.
 type Shipment struct {
 	ID         int64     `json:"id"`

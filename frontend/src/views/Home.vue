@@ -46,6 +46,14 @@ function fmt(n) { return Number(n).toFixed(2) }
       </div>
     </div>
 
+    <!-- 限时秒杀入口 -->
+    <div class="seckill-entry" @click="router.push('/seckill')">
+      <span class="se-icon">⚡</span>
+      <span class="se-title">限时秒杀</span>
+      <span class="se-sub">5折抢购 · 先到先得</span>
+      <span class="se-go">去看看 ›</span>
+    </div>
+
     <!-- 品牌馆入口 -->
     <div class="section">
       <div class="section-head"><span class="tm-red">品牌旗舰</span><span class="more" @click="router.push('/brands')">全部 ›</span></div>
@@ -82,6 +90,11 @@ function fmt(n) { return Number(n).toFixed(2) }
 .logo { color: #ff0036; font-weight: bold; font-size: 18px; }
 .search { flex: 1; padding: 0; }
 .banner { margin: 8px; border-radius: 8px; overflow: hidden; }
+.seckill-entry { display: flex; align-items: center; gap: 8px; margin: 8px; background: linear-gradient(90deg, #ff0036, #ff5577); border-radius: 8px; padding: 12px 16px; color: #fff; cursor: pointer; }
+.se-icon { font-size: 20px; }
+.se-title { font-size: 16px; font-weight: bold; }
+.se-sub { font-size: 12px; opacity: 0.9; flex: 1; }
+.se-go { font-size: 13px; }
 .cat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px 0; padding: 16px 8px; background: #fff; margin: 0 8px 8px; border-radius: 8px; }
 .cat-item { text-align: center; }
 .cat-icon { font-size: 28px; }

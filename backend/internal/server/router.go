@@ -35,6 +35,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 		api.GET("/search", h.FtsSearch)
 		api.GET("/search/suggest", h.FtsSuggest)
 
+		// Public flash-sale (限时秒杀) listing
+		api.GET("/seckill", h.ListSeckillDeals)
+
 		api.GET("/shipments/track", h.TrackByNo)
 
 		auth := api.Group("/")
@@ -75,6 +78,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 			auth.GET("/favorites", h.ListFavorites)
 			auth.POST("/favorites/:id", h.ToggleFavorite)
 			auth.GET("/favorites/:id/check", h.CheckFavorite)
+
+			// Flash-sale grab (秒杀抢购)
+			auth.POST("/seckill/:id/grab", h.GrabSeckill)
 
 			// Browse history
 			auth.GET("/history", h.ListHistory)
