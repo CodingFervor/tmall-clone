@@ -1,22 +1,37 @@
 <script setup>
-import { ref, onMounted, onActivated } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
-import { getCart, updateCart, deleteCart, createOrder } from '../api'
+import { getCart, updateCart, deleteCart, createOrder, getMyCoupons } from '../api'
 
 const router = useRouter()
 const items = ref([])
 const selectedTotal = ref(0)
 const allSelected = ref(true)
 const loading = ref(true)
+const coupons = ref([])
+const selectedCouponId = ref(null)
+const showCouponPicker = ref(false)
+
+const usableCoupons = computed(() =>
+  (coupons.value || []).filter((c) => c.is_used === 0 && (!c.coupon || selectedTotal.value >= c.coupon.threshold))
+)
+const discount = computed(() => {
+  const uc = usableCoupons.value.find((c) => c.id === selectedCouponId.value)
+  if (!uc || !uc.coupon) return 0
+  if (uc.coupon.coupon_type === 'discount') return Math.round(selectedTotal.value * (1 - uc.coupon.value) * 100) / 100
+  return uc.coupon.value
+})
+const finalTotal = computed(() => Math.max(0, selectedTotal.value - discount.value))
 
 async function load() {
   loading.value = true
   try {
-    const res = await getCart()
-    items.value = res.data || []
-    selectedTotal.value = res.selected_total || 0
+    const [cartRes, myCoupons] = await Promise.all([getCart(), getMyCoupons().catch(() => [])])
+    items.value = cartRes.data || []
+    selectedTotal.value = cartRes.selected_total || 0
     allSelected.value = items.value.length > 0 && items.value.every((i) => i.selected === 1)
+    coupons.value = myCoupons || []
   } catch (e) { if (e.response?.status === 401) router.replace('/login') } finally { loading.value = false }
 }
 onMounted(load); onActivated(load)
@@ -38,7 +53,13 @@ async function toggleAll() {
 async function checkout() {
   if (selectedTotal.value <= 0) { showToast('请选择商品'); return }
   const sel = items.value.filter((i) => i.selected === 1).map((i) => ({ product_id: i.product_id, quantity: i.quantity }))
-  try { await createOrder({ items: sel, address: '' }); showSuccessToast('下单成功'); router.push('/orders') } catch (e) { showToast('下单失败') }
+  try { await createOrder({ items: sel, address: '', user_coupon_id: selectedCouponId.value || undefined }); showSuccessToast('下单成功'); router.push('/orders') } catch (e) { showToast(e.response?.data?.error || '下单失败') }
+}
+function couponLabel(uc) {
+  if (!uc.coupon) return ''
+  const c = uc.coupon
+  if (c.coupon_type === 'discount') return `${(c.value * 10).toFixed(1)}折券 · 满${c.threshold}可用`
+  return `满${c.threshold}减${c.value}`
 }
 function fmt(n) { return Number(n).toFixed(2) }
 </script>
@@ -57,7 +78,28 @@ function fmt(n) { return Number(n).toFixed(2) }
           <div class="ci-bottom"><span class="price">¥{{ fmt(it.price) }}</span><van-stepper v-model="it.quantity" :min="1" :max="it.stock" @change="(v) => changeQty(it, v)" /><van-icon name="delete-o" size="20" @click="removeItem(it)" /></div>
         </div>
       </div>
-      <van-submit-bar :price="selectedTotal * 100" button-text="结算" @submit="checkout"><van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox></van-submit-bar>
+      <!-- Coupon selector -->
+      <van-cell
+        title="优惠券"
+        :value="selectedCouponId ? couponLabel(usableCoupons.find((c) => c.id === selectedCouponId)) : (usableCoupons.length ? usableCoupons.length + '张可用' : '暂无可用')"
+        is-link
+        @click="showCouponPicker = true"
+        style="margin-top: 8px"
+      />
+      <div v-if="discount > 0" class="discount-line">优惠券抵扣 -¥{{ fmt(discount) }}</div>
+      <van-submit-bar :price="finalTotal * 100" button-text="结算" @submit="checkout"><van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox></van-submit-bar>
+
+      <van-popup v-model:show="showCouponPicker" position="bottom" round>
+        <div class="coupon-picker">
+          <div class="cp-head">选择优惠券</div>
+          <div v-if="!usableCoupons.length" class="cp-empty">暂无可用优惠券</div>
+          <div v-for="uc in usableCoupons" :key="uc.id" class="cp-item" :class="{ active: selectedCouponId === uc.id }" @click="selectedCouponId = (selectedCouponId === uc.id ? null : uc.id); showCouponPicker = false">
+            <div class="cp-value" v-if="uc.coupon.coupon_type === 'discount'">{{ (uc.coupon.value * 10).toFixed(1) }}折</div>
+            <div class="cp-value" v-else>¥{{ uc.coupon.value }}</div>
+            <div class="cp-info"><div class="cp-title">{{ uc.coupon.title }}</div><div class="cp-sub">{{ couponLabel(uc) }}</div></div>
+          </div>
+        </div>
+      </van-popup>
     </div>
   </div>
 </template>
@@ -70,4 +112,14 @@ function fmt(n) { return Number(n).toFixed(2) }
 .ci-name { font-size: 13px; line-height: 18px; height: 36px; }
 .ci-bottom { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .ci-bottom .price { font-size: 16px; flex: 1; }
+.discount-line { color: #ff0036; font-size: 13px; text-align: right; padding: 6px 16px; background: #fff; }
+.coupon-picker { padding: 16px; }
+.cp-head { text-align: center; font-size: 15px; font-weight: bold; margin-bottom: 12px; }
+.cp-empty { text-align: center; color: #999; padding: 30px; }
+.cp-item { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 8px; }
+.cp-item.active { border-color: #ff0036; background: #fff0f3; }
+.cp-value { color: #ff0036; font-size: 22px; font-weight: bold; min-width: 60px; text-align: center; }
+.cp-info { flex: 1; }
+.cp-title { font-size: 14px; }
+.cp-sub { font-size: 12px; color: #999; margin-top: 2px; }
 </style>

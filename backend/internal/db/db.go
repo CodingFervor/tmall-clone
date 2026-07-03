@@ -294,6 +294,32 @@ func createTables() error {
 			UNIQUE(group_buy_id, user_id)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_gbm_group ON group_buy_members(group_buy_id)`,
+		// Presales: deposit-then-balance deals (预售定金).
+		`CREATE TABLE IF NOT EXISTS presales (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			product_id INTEGER NOT NULL,
+			deposit REAL NOT NULL DEFAULT 0,
+			balance REAL NOT NULL DEFAULT 0,
+			final_price REAL NOT NULL DEFAULT 0,
+			stock INTEGER NOT NULL DEFAULT 0,
+			sold INTEGER NOT NULL DEFAULT 0,
+			deposit_end DATETIME NOT NULL,
+			balance_start DATETIME NOT NULL,
+			status TEXT NOT NULL DEFAULT 'active'
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_presales_active ON presales(status)`,
+		// Presale orders: who paid a deposit for which presale (定金记录).
+		`CREATE TABLE IF NOT EXISTS presale_orders (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			presale_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			deposit_paid REAL NOT NULL DEFAULT 0,
+			balance_paid REAL NOT NULL DEFAULT 0,
+			status TEXT NOT NULL DEFAULT 'deposit',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(presale_id, user_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_presale_orders_user ON presale_orders(user_id)`,
 		// FTS5.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		`CREATE TRIGGER IF NOT EXISTS products_ai AFTER INSERT ON products BEGIN

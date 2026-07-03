@@ -152,6 +152,52 @@ func (r *CouponRepo) ListUserCoupons(userID int64) ([]model.UserCoupon, error) {
 	return out, nil
 }
 
+// MarkUsed marks a user-coupon as used.
+func (r *CouponRepo) MarkUsed(userCouponID, userID int64) error {
+	_, err := r.db.Exec(`UPDATE user_coupons SET is_used=1 WHERE id=? AND user_id=?`, userCouponID, userID)
+	return err
+}
+
+// ApplyCoupon validates a claimed coupon against an order total, computes the
+// discount, and marks the coupon used. Returns the discount amount.
+func (r *CouponRepo) ApplyCoupon(userCouponID, userID int64, total float64) (float64, error) {
+	if userCouponID <= 0 || userID <= 0 || total <= 0 {
+		return 0, nil
+	}
+	var couponID int64
+	var isUsed int
+	var couponType string
+	var threshold, value float64
+	err := r.db.QueryRow(
+		`SELECT uc.coupon_id, uc.is_used, c.coupon_type, c.threshold, c.value
+		 FROM user_coupons uc JOIN coupons c ON c.id = uc.coupon_id
+		 WHERE uc.id=? AND uc.user_id=?`, userCouponID, userID,
+	).Scan(&couponID, &isUsed, &couponType, &threshold, &value)
+	if err != nil {
+		return 0, nil // not found — ignore
+	}
+	if isUsed == 1 {
+		return 0, fmt.Errorf("优惠券已使用")
+	}
+	if total < threshold {
+		return 0, fmt.Errorf("未满%.0f元不可用", threshold)
+	}
+	var discount float64
+	switch couponType {
+	case "discount":
+		discount = total * (1 - value)
+	default: // deduct
+		discount = value
+	}
+	if discount > total {
+		discount = total
+	}
+	if err := r.MarkUsed(userCouponID, userID); err != nil {
+		return 0, err
+	}
+	return discount, nil
+}
+
 func (r *CouponRepo) Create(c *model.Coupon) error {
 	res, err := r.db.Exec(
 		`INSERT INTO coupons (title, coupon_type, threshold, value, total_count, start_date, end_date, status) VALUES (?,?,?,?,?,?,?,?)`,

@@ -65,6 +65,10 @@ func main() {
 	groupBuyRepo := repository.NewGroupBuyRepo(db.DB)
 	groupBuyRepo.SeedGroupBuys()
 	h.SetGroupBuy(groupBuyRepo)
+	// Attach + seed the presale (预售定金) repo.
+	presaleRepo := repository.NewPresaleRepo(db.DB)
+	presaleRepo.SeedPresales()
+	h.SetPresale(presaleRepo)
 
 	_ = os.MkdirAll("data/images", 0o755)
 
