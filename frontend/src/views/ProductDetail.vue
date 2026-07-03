@@ -10,6 +10,7 @@ const product = ref(null)
 const reviews = ref([])
 const skus = ref([])
 const selectedSKU = ref(null)
+const recommendedSKU = ref(null)
 const loading = ref(true)
 const showReview = ref(false)
 const reviewRating = ref(5)
@@ -35,6 +36,7 @@ onMounted(async () => {
     product.value = res.data
     reviews.value = res.reviews || []
     skus.value = res.skus || []
+    if (res.recommended_sku) { selectedSKU.value = res.recommended_sku; recommendedSKU.value = res.recommended_sku }
     if (localStorage.getItem('tm_token')) {
       favorited.value = await checkFavorite(route.params.id)
     }
@@ -103,7 +105,7 @@ function fmt(n) { return Number(n).toFixed(2) }
       <span class="origin">¥{{ fmt(product.original_price) }}</span>
     </div>
     <div v-if="skus.length" class="sku-block">
-      <div class="sku-title">已选：<b>{{ selectedSKU ? selectedSKU.spec_text : '请选择规格' }}</b></div>
+      <div class="sku-title">已选：<b>{{ selectedSKU ? selectedSKU.spec_text : '请选择规格' }}</b><van-tag v-if="recommendedSKU && selectedSKU && selectedSKU.id === recommendedSKU.id" type="danger" round size="mini" style="margin-left:6px">AI推荐·性价比</van-tag></div>
       <div class="sku-tags">
         <span v-for="s in skus" :key="s.id" class="sku-tag" :class="{ active: selectedSKU && selectedSKU.id === s.id }" @click="selectSKU(s)">{{ s.spec_text }} <small>¥{{ fmt(s.price) }}</small></span>
       </div>
