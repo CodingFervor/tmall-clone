@@ -178,7 +178,7 @@ func (r *ProductRepo) List(page, pageSize int, categoryID, brandID int64, keywor
 		pageSize = 20
 	}
 	offset := (page - 1) * pageSize
-	q := "SELECT id,name,subtitle,price,original_price,image,images,category,category_id,brand_id,brand_name,shop,stock,sales,description,tags,is_genuine,created_at FROM products " +
+	q := "SELECT id,name,subtitle,price,original_price,image,images,category,category_id,brand_id,brand_name,shop,stock,sales,description,tags,is_genuine,video_url,created_at FROM products " +
 		where + " ORDER BY sales DESC, id DESC LIMIT ? OFFSET ?"
 	args = append(args, pageSize, offset)
 	rows, err := r.db.Query(q, args...)
@@ -201,7 +201,7 @@ func (r *ProductRepo) ListByBrand(brandID int64, limit int) ([]model.Product, er
 		limit = 20
 	}
 	rows, err := r.db.Query(
-		`SELECT id,name,subtitle,price,original_price,image,images,category,category_id,brand_id,brand_name,shop,stock,sales,description,tags,is_genuine,created_at
+		`SELECT id,name,subtitle,price,original_price,image,images,category,category_id,brand_id,brand_name,shop,stock,sales,description,tags,is_genuine,video_url,created_at
 		 FROM products WHERE brand_id=? ORDER BY sales DESC LIMIT ?`, brandID, limit)
 	if err != nil {
 		return nil, err
@@ -220,7 +220,7 @@ func (r *ProductRepo) ListByBrand(brandID int64, limit int) ([]model.Product, er
 func (r *ProductRepo) Get(id int64) (*model.Product, error) {
 	p := &model.Product{}
 	row := r.db.QueryRow(
-		`SELECT id,name,subtitle,price,original_price,image,images,category,category_id,brand_id,brand_name,shop,stock,sales,description,tags,is_genuine,created_at
+		`SELECT id,name,subtitle,price,original_price,image,images,category,category_id,brand_id,brand_name,shop,stock,sales,description,tags,is_genuine,video_url,created_at
 		 FROM products WHERE id=?`, id)
 	if err := scanProductRow(row, p); err != nil {
 		if err == sql.ErrNoRows {
@@ -258,12 +258,12 @@ func (r *ProductRepo) Delete(id int64) error {
 
 func scanProduct(rows *sql.Rows, p *model.Product) error {
 	return rows.Scan(&p.ID, &p.Name, &p.Subtitle, &p.Price, &p.OriginalPrice, &p.Image, &p.Images,
-		&p.Category, &p.CategoryID, &p.BrandID, &p.BrandName, &p.Shop, &p.Stock, &p.Sales, &p.Description, &p.Tags, &p.IsGenuine, &p.CreatedAt)
+		&p.Category, &p.CategoryID, &p.BrandID, &p.BrandName, &p.Shop, &p.Stock, &p.Sales, &p.Description, &p.Tags, &p.IsGenuine, &p.VideoURL, &p.CreatedAt)
 }
 
 func scanProductRow(row *sql.Row, p *model.Product) error {
 	return row.Scan(&p.ID, &p.Name, &p.Subtitle, &p.Price, &p.OriginalPrice, &p.Image, &p.Images,
-		&p.Category, &p.CategoryID, &p.BrandID, &p.BrandName, &p.Shop, &p.Stock, &p.Sales, &p.Description, &p.Tags, &p.IsGenuine, &p.CreatedAt)
+		&p.Category, &p.CategoryID, &p.BrandID, &p.BrandName, &p.Shop, &p.Stock, &p.Sales, &p.Description, &p.Tags, &p.IsGenuine, &p.VideoURL, &p.CreatedAt)
 }
 
 // ===================== Cart =====================
@@ -1239,6 +1239,68 @@ func (r *PriceHistoryRepo) SeedPriceHistory() {
 		}
 		_, _ = r.db.Exec(`INSERT INTO price_history (product_id, price) VALUES (?,?)`, p.id, p.price)
 	}
+}
+
+// ===================== Shop ratings (店铺评分) =====================
+
+type ShopRatingRepo struct{ db *sql.DB }
+
+func NewShopRatingRepo(db *sql.DB) *ShopRatingRepo { return &ShopRatingRepo{db: db} }
+
+func (r *ShopRatingRepo) Create(s *model.ShopRating) error {
+	res, err := r.db.Exec(
+		`INSERT INTO shop_ratings (shop, user_id, description_score, logistics_score, service_score, comment) VALUES (?,?,?,?,?,?)`,
+		s.Shop, s.UserID, clampScore(s.DescriptionScore), clampScore(s.LogisticsScore), clampScore(s.ServiceScore), s.Comment)
+	if err != nil {
+		return err
+	}
+	s.ID, _ = res.LastInsertId()
+	return nil
+}
+
+func (r *ShopRatingRepo) Summary(shop string) (*model.ShopRatingSummary, error) {
+	s := &model.ShopRatingSummary{Shop: shop}
+	err := r.db.QueryRow(
+		`SELECT COUNT(*), COALESCE(AVG(description_score),5), COALESCE(AVG(logistics_score),5), COALESCE(AVG(service_score),5)
+		 FROM shop_ratings WHERE shop=?`, shop,
+	).Scan(&s.Count, &s.DescriptionAvg, &s.LogisticsAvg, &s.ServiceAvg)
+	if err != nil {
+		s.DescriptionAvg, s.LogisticsAvg, s.ServiceAvg = 5, 5, 5
+	}
+	s.Overall = (s.DescriptionAvg + s.LogisticsAvg + s.ServiceAvg) / 3
+	return s, nil
+}
+
+func (r *ShopRatingRepo) ListByShop(shop string, limit int) ([]model.ShopRating, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	rows, err := r.db.Query(
+		`SELECT sr.id, sr.shop, sr.user_id, sr.description_score, sr.logistics_score, sr.service_score, sr.comment, sr.created_at, u.nickname
+		 FROM shop_ratings sr LEFT JOIN users u ON u.id = sr.user_id
+		 WHERE sr.shop=? ORDER BY sr.id DESC LIMIT ?`, shop, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.ShopRating{}
+	for rows.Next() {
+		var s model.ShopRating
+		if err := rows.Scan(&s.ID, &s.Shop, &s.UserID, &s.DescriptionScore, &s.LogisticsScore, &s.ServiceScore, &s.Comment, &s.CreatedAt, &s.Username); err == nil {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
+func clampScore(n int) int {
+	if n < 1 {
+		return 1
+	}
+	if n > 5 {
+		return 5
+	}
+	return n
 }
 
 // ===================== helpers =====================

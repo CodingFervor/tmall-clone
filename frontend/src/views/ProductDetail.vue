@@ -113,6 +113,8 @@ function priceTrend() {
   <div v-if="loading" class="loading"><van-loading /></div>
   <div v-else-if="product" class="detail">
     <van-nav-bar title="商品详情" left-arrow @click-left="router.back()" fixed placeholder />
+    <!-- Product intro video (商品视频介绍) -->
+    <div v-if="product.video_url" class="product-video"><video :src="product.video_url" controls preload="metadata" class="pv-player"></video></div>
     <van-swipe class="gallery" :autoplay="3000" indicator-color="#ff0036" v-if="gallery.length > 1">
       <van-swipe-item v-for="(img, i) in gallery" :key="i">
         <van-image width="100%" height="375" :src="img" fit="cover" />
@@ -136,7 +138,7 @@ function priceTrend() {
     </div>
     <van-cell-group inset>
       <van-cell title="店铺" :value="product.shop" is-link v-if="product.brand_id" @click="router.push('/brand/' + product.brand_id)" />
-      <van-cell title="店铺" :value="product.shop" v-else />
+      <van-cell title="店铺" :value="product.shop" is-link v-else @click="router.push('/shop/' + encodeURIComponent(product.shop))" />
       <van-cell title="销量" :value="product.sales + '人付款'" />
       <van-cell title="标签" :value="product.tags || '正品保障'" />
     </van-cell-group>
@@ -202,6 +204,8 @@ function priceTrend() {
 <style scoped>
 .detail { padding-bottom: 60px; }
 .loading { text-align: center; padding: 80px; }
+.product-video { background: #000; width: 100%; }
+.pv-player { width: 100%; max-height: 280px; object-fit: contain; display: block; }
 .price-block { padding: 12px 16px; background: #fff; }
 .big-price { color: #ff0036; font-size: 28px; font-weight: bold; }
 .origin { color: #999; text-decoration: line-through; margin-left: 10px; font-size: 14px; }
