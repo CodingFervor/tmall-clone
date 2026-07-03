@@ -347,8 +347,8 @@ func NewOrderRepo(db *sql.DB) *OrderRepo { return &OrderRepo{db: db} }
 func (r *OrderRepo) Create(o *model.Order) error {
 	o.OrderNo = fmt.Sprintf("TM%d%d", time.Now().Unix(), o.UserID)
 	res, err := r.db.Exec(
-		`INSERT INTO orders (user_id, order_no, total, status, items_json, address) VALUES (?,?,?,?,?,?)`,
-		o.UserID, o.OrderNo, o.Total, defaultStr(o.Status, "pending"), o.ItemsJSON, o.Address)
+		`INSERT INTO orders (user_id, order_no, total, status, items_json, address, remark) VALUES (?,?,?,?,?,?,?)`,
+		o.UserID, o.OrderNo, o.Total, defaultStr(o.Status, "pending"), o.ItemsJSON, o.Address, o.Remark)
 	if err != nil {
 		return err
 	}
@@ -360,8 +360,8 @@ func (r *OrderRepo) Create(o *model.Order) error {
 func (r *OrderRepo) Get(id, userID int64) (*model.Order, error) {
 	o := &model.Order{}
 	err := r.db.QueryRow(
-		`SELECT id, user_id, order_no, total, status, items_json, address, created_at FROM orders WHERE id=?`, id,
-	).Scan(&o.ID, &o.UserID, &o.OrderNo, &o.Total, &o.Status, &o.ItemsJSON, &o.Address, &o.CreatedAt)
+		`SELECT id, user_id, order_no, total, status, items_json, address, remark, created_at FROM orders WHERE id=?`, id,
+	).Scan(&o.ID, &o.UserID, &o.OrderNo, &o.Total, &o.Status, &o.ItemsJSON, &o.Address, &o.Remark, &o.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -376,7 +376,7 @@ func (r *OrderRepo) Get(id, userID int64) (*model.Order, error) {
 
 func (r *OrderRepo) ListByUser(userID int64) ([]model.Order, error) {
 	rows, err := r.db.Query(
-		`SELECT id, user_id, order_no, total, status, items_json, address, created_at
+		`SELECT id, user_id, order_no, total, status, items_json, address, remark, created_at
 		 FROM orders WHERE user_id=? ORDER BY id DESC`, userID)
 	if err != nil {
 		return nil, err
@@ -385,7 +385,7 @@ func (r *OrderRepo) ListByUser(userID int64) ([]model.Order, error) {
 	out := []model.Order{}
 	for rows.Next() {
 		var o model.Order
-		if err := rows.Scan(&o.ID, &o.UserID, &o.OrderNo, &o.Total, &o.Status, &o.ItemsJSON, &o.Address, &o.CreatedAt); err == nil {
+		if err := rows.Scan(&o.ID, &o.UserID, &o.OrderNo, &o.Total, &o.Status, &o.ItemsJSON, &o.Address, &o.Remark, &o.CreatedAt); err == nil {
 			out = append(out, o)
 		}
 	}
@@ -1172,6 +1172,72 @@ func (r *PresaleRepo) SeedPresales() {
 		_, _ = r.db.Exec(
 			`INSERT INTO presales (product_id, deposit, balance, final_price, stock, sold, deposit_end, balance_start, status) VALUES (?,?,?,?,?,?,?,?,?)`,
 			p.id, deposit, balance, final, 30, 0, depositEnd, balanceStart, "active")
+	}
+}
+
+// ===================== Price history (比价历史) =====================
+
+type PriceHistoryRepo struct{ db *sql.DB }
+
+func NewPriceHistoryRepo(db *sql.DB) *PriceHistoryRepo { return &PriceHistoryRepo{db: db} }
+
+func (r *PriceHistoryRepo) ListByProduct(productID int64, limit int) ([]model.PriceHistory, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 30
+	}
+	rows, err := r.db.Query(
+		`SELECT id, product_id, price, recorded_at FROM price_history WHERE product_id=? ORDER BY recorded_at ASC LIMIT ?`, productID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.PriceHistory{}
+	for rows.Next() {
+		var h model.PriceHistory
+		if err := rows.Scan(&h.ID, &h.ProductID, &h.Price, &h.RecordedAt); err == nil {
+			out = append(out, h)
+		}
+	}
+	return out, nil
+}
+
+func (r *PriceHistoryRepo) Record(productID int64, price float64) error {
+	_, err := r.db.Exec(`INSERT INTO price_history (product_id, price) VALUES (?,?)`, productID, price)
+	return err
+}
+
+// SeedPriceHistory back-fills synthetic historical points per product.
+func (r *PriceHistoryRepo) SeedPriceHistory() {
+	var n int
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM price_history`).Scan(&n)
+	if n > 0 {
+		return
+	}
+	rows, err := r.db.Query(`SELECT id, price FROM products`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	type pp struct {
+		id    int64
+		price float64
+	}
+	items := []pp{}
+	for rows.Next() {
+		var p pp
+		if rows.Scan(&p.id, &p.price) == nil {
+			items = append(items, p)
+		}
+	}
+	now := time.Now()
+	for _, p := range items {
+		for i := 4; i >= 0; i-- {
+			day := now.AddDate(0, 0, -i*6)
+			factor := 1.0 + float64(i)*0.05
+			hp := p.price * factor
+			_, _ = r.db.Exec(`INSERT INTO price_history (product_id, price, recorded_at) VALUES (?,?,?)`, p.id, hp, day)
+		}
+		_, _ = r.db.Exec(`INSERT INTO price_history (product_id, price) VALUES (?,?)`, p.id, p.price)
 	}
 }
 

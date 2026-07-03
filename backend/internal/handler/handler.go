@@ -16,27 +16,28 @@ import (
 
 // Handler bundles all repositories and the JWT secret.
 type Handler struct {
-	User     *repository.UserRepo
-	Brand    *repository.BrandRepo
-	Cat      *repository.CategoryRepo
-	Product  *repository.ProductRepo
-	Cart     *repository.CartRepo
-	Order    *repository.OrderRepo
-	Review   *repository.ReviewRepo
-	SKU      *repository.SKURepo
-	Payment  *repository.PaymentRepo
-	Shipment *repository.ShipmentRepo
-	Refund   *repository.RefundRepo
-	Coupon   *repository.CouponRepo
-	Address  *repository.AddressRepo
-	Favorite *repository.FavoriteRepo
-	History  *repository.HistoryRepo
-	CheckIn  *repository.CheckInRepo
-	Shop     *repository.PointShopRepo
-	Seckill  *repository.SeckillRepo
-	GroupBuy *repository.GroupBuyRepo
-	Presale  *repository.PresaleRepo
-	jwtKey   []byte
+	User         *repository.UserRepo
+	Brand        *repository.BrandRepo
+	Cat          *repository.CategoryRepo
+	Product      *repository.ProductRepo
+	Cart         *repository.CartRepo
+	Order        *repository.OrderRepo
+	Review       *repository.ReviewRepo
+	SKU          *repository.SKURepo
+	Payment      *repository.PaymentRepo
+	Shipment     *repository.ShipmentRepo
+	Refund       *repository.RefundRepo
+	Coupon       *repository.CouponRepo
+	Address      *repository.AddressRepo
+	Favorite     *repository.FavoriteRepo
+	History      *repository.HistoryRepo
+	CheckIn      *repository.CheckInRepo
+	Shop         *repository.PointShopRepo
+	Seckill      *repository.SeckillRepo
+	GroupBuy     *repository.GroupBuyRepo
+	Presale      *repository.PresaleRepo
+	PriceHistory *repository.PriceHistoryRepo
+	jwtKey       []byte
 }
 
 func New(jwtSecret string, u *repository.UserRepo, b *repository.BrandRepo, c *repository.CategoryRepo, p *repository.ProductRepo,
@@ -70,6 +71,11 @@ func (h *Handler) SetGroupBuy(g *repository.GroupBuyRepo) {
 // SetPresale attaches the presale repo.
 func (h *Handler) SetPresale(p *repository.PresaleRepo) {
 	h.Presale = p
+}
+
+// SetPriceHistory attaches the price-history repo.
+func (h *Handler) SetPriceHistory(ph *repository.PriceHistoryRepo) {
+	h.PriceHistory = ph
 }
 
 // ---- JWT (HS256, hand-rolled) ----

@@ -12,6 +12,7 @@ const loading = ref(true)
 const coupons = ref([])
 const selectedCouponId = ref(null)
 const showCouponPicker = ref(false)
+const remark = ref('')
 
 const usableCoupons = computed(() =>
   (coupons.value || []).filter((c) => c.is_used === 0 && (!c.coupon || selectedTotal.value >= c.coupon.threshold))
@@ -53,7 +54,7 @@ async function toggleAll() {
 async function checkout() {
   if (selectedTotal.value <= 0) { showToast('请选择商品'); return }
   const sel = items.value.filter((i) => i.selected === 1).map((i) => ({ product_id: i.product_id, quantity: i.quantity }))
-  try { await createOrder({ items: sel, address: '', user_coupon_id: selectedCouponId.value || undefined }); showSuccessToast('下单成功'); router.push('/orders') } catch (e) { showToast(e.response?.data?.error || '下单失败') }
+  try { await createOrder({ items: sel, address: '', user_coupon_id: selectedCouponId.value || undefined, remark: remark.value }); showSuccessToast('下单成功'); router.push('/orders') } catch (e) { showToast(e.response?.data?.error || '下单失败') }
 }
 function couponLabel(uc) {
   if (!uc.coupon) return ''
@@ -86,6 +87,7 @@ function fmt(n) { return Number(n).toFixed(2) }
         @click="showCouponPicker = true"
         style="margin-top: 8px"
       />
+      <van-field v-model="remark" label="订单备注" placeholder="选填，如送货时间、发票等" style="margin-top: 8px" />
       <div v-if="discount > 0" class="discount-line">优惠券抵扣 -¥{{ fmt(discount) }}</div>
       <van-submit-bar :price="finalTotal * 100" button-text="结算" @submit="checkout"><van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox></van-submit-bar>
 
