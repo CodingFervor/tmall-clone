@@ -24,6 +24,17 @@ const discount = computed(() => {
   return uc.coupon.value
 })
 const finalTotal = computed(() => Math.max(0, selectedTotal.value - discount.value))
+// Top-up hints: claimed coupons just below the threshold (凑单提示).
+const topupHints = computed(() => {
+  const hints = []
+  for (const c of (coupons.value || [])) {
+    if (c.is_used === 0 && c.coupon && selectedTotal.value < c.coupon.threshold) {
+      const diff = Math.ceil(c.coupon.threshold - selectedTotal.value)
+      if (diff <= 50) hints.push({ id: c.id, diff, label: c.coupon.coupon_type === 'discount' ? `${(c.coupon.value * 10).toFixed(1)}折券` : `满${c.coupon.threshold}减${c.coupon.value}` })
+    }
+  }
+  return hints.sort((a, b) => a.diff - b.diff)
+})
 
 async function load() {
   loading.value = true
@@ -88,6 +99,10 @@ function fmt(n) { return Number(n).toFixed(2) }
         style="margin-top: 8px"
       />
       <van-field v-model="remark" label="订单备注" placeholder="选填，如送货时间、发票等" style="margin-top: 8px" />
+      <!-- Top-up hints (凑单提示) -->
+      <div v-if="topupHints.length" class="topup-hints">
+        <div v-for="h in topupHints.slice(0, 2)" :key="h.id" class="th-item">💡 再买 <b>¥{{ h.diff }}</b> 可使用 {{ h.label }}，<span class="th-go" @click="router.push('/home')">去凑单 ›</span></div>
+      </div>
       <div v-if="discount > 0" class="discount-line">优惠券抵扣 -¥{{ fmt(discount) }}</div>
       <van-submit-bar :price="finalTotal * 100" button-text="结算" @submit="checkout"><van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox></van-submit-bar>
 
@@ -115,6 +130,10 @@ function fmt(n) { return Number(n).toFixed(2) }
 .ci-bottom { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .ci-bottom .price { font-size: 16px; flex: 1; }
 .discount-line { color: #ff0036; font-size: 13px; text-align: right; padding: 6px 16px; background: #fff; }
+.topup-hints { padding: 0 16px 8px; }
+.th-item { background: #fff8e6; color: #996600; font-size: 12px; padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; line-height: 18px; }
+.th-item b { color: #ff0036; }
+.th-go { color: #ff0036; font-weight: bold; }
 .coupon-picker { padding: 16px; }
 .cp-head { text-align: center; font-size: 15px; font-weight: bold; margin-bottom: 12px; }
 .cp-empty { text-align: center; color: #999; padding: 30px; }
