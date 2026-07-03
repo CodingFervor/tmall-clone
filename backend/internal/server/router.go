@@ -38,6 +38,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 		// Public flash-sale (限时秒杀) listing
 		api.GET("/seckill", h.ListSeckillDeals)
 
+		// Public group-buy (拼团) listing
+		api.GET("/group-buys", h.ListGroupBuys)
+
 		api.GET("/shipments/track", h.TrackByNo)
 
 		auth := api.Group("/")
@@ -81,6 +84,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 
 			// Flash-sale grab (秒杀抢购)
 			auth.POST("/seckill/:id/grab", h.GrabSeckill)
+
+			// Group buy join (拼团参团)
+			auth.POST("/group-buys/:id/join", h.JoinGroupBuy)
 
 			// Browse history
 			auth.GET("/history", h.ListHistory)

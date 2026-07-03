@@ -61,6 +61,10 @@ func main() {
 	seckillRepo := repository.NewSeckillRepo(db.DB)
 	seckillRepo.SeedSeckill()
 	h.SetSeckill(seckillRepo)
+	// Attach + seed the group-buy (拼团) repo.
+	groupBuyRepo := repository.NewGroupBuyRepo(db.DB)
+	groupBuyRepo.SeedGroupBuys()
+	h.SetGroupBuy(groupBuyRepo)
 
 	_ = os.MkdirAll("data/images", 0o755)
 

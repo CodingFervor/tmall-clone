@@ -112,3 +112,7 @@ export const replyReview = (reviewId, content) => http.post('/reviews/reply', { 
 // ---- Seckill deals (限时秒杀) ----
 export const getSeckillDeals = () => http.get('/seckill').then((r) => r.data.data)
 export const grabSeckill = (id) => http.post(`/seckill/${id}/grab`).then((r) => r.data)
+
+// ---- Group buys (拼团) ----
+export const getGroupBuys = () => http.get('/group-buys').then((r) => r.data.data)
+export const joinGroupBuy = (id) => http.post(`/group-buys/${id}/join`).then((r) => r.data)
