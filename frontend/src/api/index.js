@@ -127,3 +127,11 @@ export const getPriceHistory = (id) => http.get(`/products/${id}/price-history`)
 // ---- Shop ratings (店铺评分) ----
 export const getShopRatings = (name) => http.get(`/shops/${encodeURIComponent(name)}/ratings`).then((r) => r.data)
 export const createShopRating = (name, payload) => http.post(`/shops/${encodeURIComponent(name)}/ratings`, payload).then((r) => r.data.data)
+
+// ---- Bundles (组合套餐) ----
+export const getBundles = () => http.get('/bundles').then((r) => r.data.data)
+
+// ---- Restock alerts (到货通知) ----
+export const checkRestock = (id) => http.get(`/products/${id}/restock`).then((r) => r.data.subscribed)
+export const subscribeRestock = (id) => http.post(`/products/${id}/restock`).then((r) => r.data)
+export const unsubscribeRestock = (id) => http.delete(`/products/${id}/restock`).then((r) => r.data)

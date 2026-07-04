@@ -75,6 +75,10 @@ func main() {
 	h.SetPriceHistory(priceHistoryRepo)
 	// Attach the shop-rating (店铺评分) repo.
 	h.SetShopRating(repository.NewShopRatingRepo(db.DB))
+	// Attach + seed the bundle (组合套餐) + restock-alert repos.
+	bundleRepo := repository.NewBundleRepo(db.DB)
+	bundleRepo.SeedBundles()
+	h.SetBundle(bundleRepo, repository.NewRestockRepo(db.DB))
 
 	_ = os.MkdirAll("data/images", 0o755)
 
