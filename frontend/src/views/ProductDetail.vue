@@ -18,6 +18,7 @@ const restockSubscribed = ref(false)
 const qaList = ref([])
 const showQA = ref(false)
 const qaQuestion = ref('')
+const relatedProducts = ref([])
 const loading = ref(true)
 const showReview = ref(false)
 const reviewRating = ref(5)
@@ -44,6 +45,7 @@ onMounted(async () => {
     reviews.value = res.reviews || []
     skus.value = res.skus || []
     if (res.recommended_sku) { selectedSKU.value = res.recommended_sku; recommendedSKU.value = res.recommended_sku }
+    relatedProducts.value = res.related || []
     if (localStorage.getItem('tm_token')) {
       favorited.value = await checkFavorite(route.params.id)
     }
@@ -98,6 +100,7 @@ async function submitReply(r) {
 function selectSKU(sku) { selectedSKU.value = sku }
 function currentPrice() { return selectedSKU.value ? selectedSKU.value.price : (product.value ? product.value.price : 0) }
 function fmt(n) { return Number(n).toFixed(2) }
+function goProduct(id) { router.replace('/product/' + id); setTimeout(() => window.location.reload(), 50) }
 function qrPattern(n) { const row = Math.floor((n - 1) / 8); const col = (n - 1) % 8; const corner = (row < 2 || row > 5) && (col < 2 || col > 5); return corner || ((row * 7 + col * 3 + n) % 3 === 0) }
 async function copyShareLink() { try { await navigator.clipboard.writeText(window.location.href); showSuccessToast('链接已复制') } catch (e) { showToast('复制失败') } }
 async function toggleRestock() {
@@ -209,6 +212,17 @@ function priceTrend() {
         </div>
       </div>
       <van-empty v-if="!reviews.length" description="暂无评价" />
+    </div>
+    <!-- Related products (看了又看) -->
+    <div v-if="relatedProducts.length" class="related-section">
+      <div class="rs-head">看了又看</div>
+      <div class="rs-scroll">
+        <div v-for="rp in relatedProducts" :key="rp.id" class="rs-card" @click="goProduct(rp.id)">
+          <van-image width="100" height="100" radius="6" :src="rp.image" fit="cover" />
+          <div class="rs-name van-multi-ellipsis--l2">{{ rp.name }}</div>
+          <div class="rs-price">¥{{ fmt(rp.price) }}</div>
+        </div>
+      </div>
     </div>
     <van-action-bar>
       <van-action-bar-icon icon="chat-o" text="客服" @click="showToast('客服功能为演示')" />
@@ -335,4 +349,10 @@ function priceTrend() {
 .qr-cell.on { background: #333; }
 .qr-text { font-size: 11px; color: #999; margin-top: 6px; }
 .pc-brand { color: #ff0036; font-size: 13px; font-weight: bold; margin-top: 12px; }
+.related-section { background: #fff; margin-top: 8px; padding: 12px 16px; }
+.rs-head { font-size: 15px; font-weight: bold; margin-bottom: 10px; }
+.rs-scroll { display: flex; gap: 10px; overflow-x: auto; }
+.rs-card { flex-shrink: 0; width: 110px; }
+.rs-name { font-size: 12px; color: #333; line-height: 16px; margin-top: 4px; height: 32px; }
+.rs-price { color: #ff0036; font-size: 14px; font-weight: bold; }
 </style>

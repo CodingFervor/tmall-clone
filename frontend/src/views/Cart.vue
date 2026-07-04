@@ -24,6 +24,7 @@ const discount = computed(() => {
   return uc.coupon.value
 })
 const finalTotal = computed(() => Math.max(0, selectedTotal.value - discount.value))
+const selectedCount = computed(() => items.value.filter((i) => i.selected === 1).length)
 // Top-up hints: claimed coupons just below the threshold (凑单提示).
 const topupHints = computed(() => {
   const hints = []
@@ -104,7 +105,7 @@ function fmt(n) { return Number(n).toFixed(2) }
         <div v-for="h in topupHints.slice(0, 2)" :key="h.id" class="th-item">💡 再买 <b>¥{{ h.diff }}</b> 可使用 {{ h.label }}，<span class="th-go" @click="router.push('/home')">去凑单 ›</span></div>
       </div>
       <div v-if="discount > 0" class="discount-line">优惠券抵扣 -¥{{ fmt(discount) }}</div>
-      <van-submit-bar :price="finalTotal * 100" button-text="结算" @submit="checkout"><van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox></van-submit-bar>
+      <van-submit-bar :price="finalTotal * 100" :button-text="'结算 (' + selectedCount + '件)'" @submit="checkout"><van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox></van-submit-bar>
 
       <van-popup v-model:show="showCouponPicker" position="bottom" round>
         <div class="coupon-picker">
