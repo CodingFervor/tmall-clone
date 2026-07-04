@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showDialog } from 'vant'
-import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock } from '../api'
+import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock, getProductQA, askProductQA } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,6 +15,9 @@ const priceHistory = ref([])
 const priceStats = ref(null)
 const showPoster = ref(false)
 const restockSubscribed = ref(false)
+const qaList = ref([])
+const showQA = ref(false)
+const qaQuestion = ref('')
 const loading = ref(true)
 const showReview = ref(false)
 const reviewRating = ref(5)
@@ -46,6 +49,7 @@ onMounted(async () => {
     }
     getPriceHistory(route.params.id).then((d) => { priceHistory.value = d.data || []; priceStats.value = d.stats }).catch(() => {})
     if (localStorage.getItem('tm_token')) { checkRestock(route.params.id).then((s) => { restockSubscribed.value = s }).catch(() => {}) }
+    getProductQA(route.params.id).then((d) => { qaList.value = d || [] }).catch(() => {})
   } catch (e) {
     showToast('商品不存在')
   } finally {
@@ -103,6 +107,12 @@ async function toggleRestock() {
     else { await subscribeRestock(product.value.id); restockSubscribed.value = true; showSuccessToast('到货后将通知您') }
   } catch (e) { showToast('操作失败') }
 }
+async function submitQA() {
+  if (!qaQuestion.value.trim()) { showToast('请输入问题'); return }
+  if (!localStorage.getItem('tm_token')) { showDialog({ title: '提示', message: '请先登录' }).then(() => router.push('/login')); return }
+  try { const qa = await askProductQA(product.value.id, qaQuestion.value); qaList.value.unshift(qa); showQA.value = false; qaQuestion.value = ''; showSuccessToast('提问成功') }
+  catch (e) { showToast('请先登录') }
+}
 function priceBars() {
   if (!priceHistory.value.length) return []
   const prices = priceHistory.value.map((p) => p.price)
@@ -136,6 +146,7 @@ function priceTrend() {
     <div class="price-block">
       <span class="big-price">¥{{ fmt(currentPrice()) }}</span>
       <span class="origin">¥{{ fmt(product.original_price) }}</span>
+      <span v-if="product.vip_price > 0 && product.vip_price < currentPrice()" class="vip-price"><van-icon name="diamond-o" /> 88VIP ¥{{ fmt(product.vip_price) }}</span>
     </div>
     <div v-if="skus.length" class="sku-block">
       <div class="sku-title">已选：<b>{{ selectedSKU ? selectedSKU.spec_text : '请选择规格' }}</b><van-tag v-if="recommendedSKU && selectedSKU && selectedSKU.id === recommendedSKU.id" type="danger" round size="mini" style="margin-left:6px">AI推荐·性价比</van-tag></div>
@@ -170,6 +181,18 @@ function priceTrend() {
         </div>
       </div>
     </div>
+    <!-- Product Q&A (商品问答) -->
+    <div class="qa-section">
+      <div class="qa-head"><span>商品问答 ({{ qaList.length }})</span><van-button size="mini" type="danger" plain @click="showQA = true">提问</van-button></div>
+      <div v-if="!qaList.length" class="qa-empty">暂无问答</div>
+      <div v-for="qa in qaList.slice(0, 5)" :key="qa.id" class="qa-item">
+        <div class="qa-q"><span class="qa-tag-q">问</span> {{ qa.question }}</div>
+        <div v-if="qa.answer" class="qa-a"><span class="qa-tag-a">答</span> {{ qa.answer }} <small class="qa-answerer">{{ qa.answerer }}</small></div>
+      </div>
+    </div>
+    <van-popup v-model:show="showQA" position="bottom" round closeable>
+      <div class="qa-form"><h3>我要提问</h3><van-field v-model="qaQuestion" type="textarea" placeholder="说说你想了解的问题" rows="3" /><van-button type="danger" block @click="submitQA" style="margin-top:12px">提交问题</van-button></div>
+    </van-popup>
     <div v-if="product.description" class="desc"><h3>商品详情</h3><p>{{ product.description }}</p></div>
     <div class="reviews">
       <div class="rev-head"><span>商品评价 ({{ reviews.length }})</span><van-button size="mini" type="danger" plain @click="showReview = true">写评价</van-button></div>
@@ -243,6 +266,19 @@ function priceTrend() {
 .product-video { background: #000; width: 100%; }
 .pv-player { width: 100%; max-height: 280px; object-fit: contain; display: block; }
 .price-block { padding: 12px 16px; background: #fff; }
+.vip-price { margin-left: 12px; color: #333; font-size: 13px; background: linear-gradient(90deg, #ffd700, #ffaa00); padding: 2px 10px; border-radius: 12px; }
+.qa-section { background: #fff; margin-top: 8px; padding: 12px 16px; }
+.qa-head { display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: bold; }
+.qa-empty { color: #999; font-size: 13px; padding: 12px 0; }
+.qa-item { padding: 10px 0; border-top: 1px solid #f5f5f5; }
+.qa-q { font-size: 14px; line-height: 20px; }
+.qa-tag-q { background: #ff0036; color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 4px; margin-right: 6px; }
+.qa-a { font-size: 13px; color: #666; margin-top: 6px; line-height: 18px; }
+.qa-tag-a { background: #07c160; color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 4px; margin-right: 6px; }
+.qa-answerer { color: #999; margin-left: 6px; }
+.qa-form { padding: 20px; }
+.qa-form h3 { text-align: center; margin-bottom: 16px; }
+.qa-form .van-field { border: 1px solid #eee; }
 .big-price { color: #ff0036; font-size: 28px; font-weight: bold; }
 .origin { color: #999; text-decoration: line-through; margin-left: 10px; font-size: 14px; }
 .sku-block { padding: 12px 16px; background: #fff; border-top: 1px solid #f5f5f5; }

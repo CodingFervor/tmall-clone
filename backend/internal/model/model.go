@@ -38,6 +38,7 @@ type Product struct {
 	Image         string    `json:"image"`
 	Images        string    `json:"images"`
 	VideoURL      string    `json:"video_url"` // optional product intro video
+	VipPrice      float64   `json:"vip_price"` // member-only price (0 = no VIP price)
 	Category      string    `json:"category"`
 	CategoryID    int64     `json:"category_id"`
 	BrandID       int64     `json:"brand_id"`
@@ -98,6 +99,18 @@ type RestockAlert struct {
 	UserID    int64 `json:"user_id"`
 	ProductID int64 `json:"product_id"`
 	Notified  int   `json:"notified"`
+}
+
+// ProductQA is a buyer's question about a product + optional seller answer (商品问答).
+type ProductQA struct {
+	ID        int64     `json:"id"`
+	ProductID int64     `json:"product_id"`
+	UserID    int64     `json:"user_id"`
+	Username  string    `json:"username"`
+	Question  string    `json:"question"`
+	Answer    string    `json:"answer"`
+	Answerer  string    `json:"answerer"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type CartItem struct {
