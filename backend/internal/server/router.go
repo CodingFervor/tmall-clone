@@ -133,6 +133,7 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 
 			// Confirm receipt (order lifecycle)
 			auth.POST("/orders/:id/confirm", h.ConfirmOrder)
+			auth.POST("/orders/:id/cancel", h.CancelOrder)
 
 			// After-sale refunds
 			auth.POST("/refunds", h.CreateRefund)
