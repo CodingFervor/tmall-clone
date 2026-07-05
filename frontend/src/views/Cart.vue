@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
-import { getCart, updateCart, deleteCart, createOrder, getMyCoupons, getAddresses, requestInvoice, getTieredDiscounts } from '../api'
+import { getCart, updateCart, deleteCart, createOrder, getMyCoupons, getAddresses, requestInvoice, getTieredDiscounts, getProducts, addToCart } from '../api'
 
 const router = useRouter()
 const items = ref([])
@@ -13,6 +13,8 @@ const coupons = ref([])
 const selectedCouponId = ref(null)
 const showCouponPicker = ref(false)
 const remark = ref('')
+// Recommended products (猜你喜欢).
+const recommendations = ref([])
 // Address picker (收货地址).
 const addresses = ref([])
 const selectedAddressId = ref(null)
@@ -70,11 +72,12 @@ function isPriceDrop(item) {
 async function load() {
   loading.value = true
   try {
-    const [cartRes, myCoupons, addrList, tierList] = await Promise.all([
+    const [cartRes, myCoupons, addrList, tierList, recs] = await Promise.all([
       getCart(),
       getMyCoupons().catch(() => []),
       getAddresses().catch(() => []),
       getTieredDiscounts().catch(() => []),
+      getProducts({ page: 1, page_size: 4 }).then((r) => r.data).catch(() => []),
     ])
     items.value = cartRes.data || []
     selectedTotal.value = cartRes.selected_total || 0
@@ -82,6 +85,7 @@ async function load() {
     coupons.value = myCoupons || []
     addresses.value = addrList || []
     tiers.value = tierList || []
+    recommendations.value = recs || []
     // Default to the marked default address (or the first).
     if (selectedAddressId.value === null) {
       const def = addresses.value.find((a) => a.is_default === 1) || addresses.value[0]
@@ -100,6 +104,7 @@ async function changeQty(item, qty) {
   try { await updateCart(item.id, qty, item.selected); item.quantity = qty; await load() } catch (e) {}
 }
 async function removeItem(item) { try { await deleteCart(item.id); await load(); showSuccessToast('已删除') } catch (e) {} }
+async function quickAdd(p) { try { await addToCart(p.id, 1); await load(); showSuccessToast('已加入购物车') } catch (e) { showToast(e.response?.data?.error || '加入失败') } }
 async function toggleAll() {
   const t = allSelected.value ? 0 : 1
   for (const it of items.value) { if (it.selected !== t) await updateCart(it.id, it.quantity, t) }
@@ -167,6 +172,20 @@ function fmt(n) { return Number(n).toFixed(2) }
 <template>
   <div class="cart-page">
     <van-nav-bar title="购物车" fixed placeholder />
+    <!-- Recommendations (猜你喜欢) — horizontal scroll above the cart items. -->
+    <div v-if="!loading && recommendations.length" class="rec-section">
+      <div class="rec-head">猜你喜欢</div>
+      <div class="rec-scroll">
+        <div v-for="p in recommendations" :key="p.id" class="rec-card" @click="router.push('/product/' + p.id)">
+          <van-image width="100" height="100" radius="6" :src="p.image" fit="cover" />
+          <div class="rec-name van-multi-ellipsis--l2">{{ p.name }}</div>
+          <div class="rec-bottom">
+            <span class="price">¥{{ fmt(p.price) }}</span>
+            <van-button size="mini" type="danger" round @click.stop="quickAdd(p)">加入购物车</van-button>
+          </div>
+        </div>
+      </div>
+    </div>
     <div v-if="loading" class="loading"><van-loading /></div>
     <van-empty v-else-if="!items.length" description="购物车是空的"><van-button type="danger" round @click="router.push('/home')">去逛逛</van-button></van-empty>
     <div v-else>
@@ -309,4 +328,13 @@ function fmt(n) { return Number(n).toFixed(2) }
 .addr-detail { font-size: 12px; color: #999; line-height: 18px; }
 .invoice-form { padding: 16px 0; }
 .inv-actions { display: flex; gap: 12px; padding: 16px; }
+/* Recommendations (猜你喜欢) */
+.rec-section { background: #fff; margin: 0 0 8px; padding: 10px 0 12px; }
+.rec-head { font-size: 15px; font-weight: bold; color: #333; padding: 0 12px 8px; }
+.rec-scroll { display: flex; gap: 10px; overflow-x: auto; padding: 0 12px; -webkit-overflow-scrolling: touch; }
+.rec-scroll::-webkit-scrollbar { display: none; }
+.rec-card { flex: 0 0 auto; width: 110px; }
+.rec-name { font-size: 12px; color: #333; line-height: 16px; height: 32px; margin-top: 6px; }
+.rec-bottom { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 4px; }
+.rec-bottom .price { color: #ff0036; font-size: 14px; font-weight: bold; }
 </style>

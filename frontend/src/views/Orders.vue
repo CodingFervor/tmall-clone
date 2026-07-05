@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
 import { getOrders, payOrder, createRefund, confirmOrder, cancelOrder } from '../api'
@@ -8,7 +8,39 @@ const router = useRouter()
 const orders = ref([])
 const loading = ref(true)
 
-onMounted(async () => { try { orders.value = await getOrders() } catch (e) { showToast('加载失败') } finally { loading.value = false } })
+// Order timeout countdown (订单超时倒计时).
+// Pending orders expire 30 minutes after created_at.
+const ORDER_TIMEOUT_MS = 30 * 60 * 1000
+const now = ref(Date.now())
+let timer = null
+function startTimer() {
+  stopTimer()
+  timer = setInterval(() => { now.value = Date.now() }, 1000)
+}
+function stopTimer() { if (timer) { clearInterval(timer); timer = null } }
+// Remaining ms for a pending order; <=0 means timed out.
+function remainingMs(o) {
+  if (o.status !== 'pending' || !o.created_at) return 0
+  const created = new Date(o.created_at).getTime()
+  if (isNaN(created)) return 0
+  return created + ORDER_TIMEOUT_MS - now.value
+}
+function countdown(o) {
+  const ms = remainingMs(o)
+  if (ms <= 0) return '已超时'
+  const total = Math.floor(ms / 1000)
+  const m = String(Math.floor(total / 60)).padStart(2, '0')
+  const s = String(total % 60).padStart(2, '0')
+  return `剩余 ${m}:${s}`
+}
+function isTimedOut(o) { return o.status === 'pending' && remainingMs(o) <= 0 }
+
+onMounted(async () => {
+  startTimer()
+  try { orders.value = await getOrders() } catch (e) { showToast('加载失败') } finally { loading.value = false }
+})
+onActivated(startTimer)
+onUnmounted(stopTimer)
 function pay(o) { router.push({ name: 'pay', query: { order_id: o.id } }) }
 async function confirm(o) {
   try { await confirmOrder(o.id); o.status = 'completed'; showSuccessToast('确认收货成功') }
@@ -38,6 +70,7 @@ function parseItems(json) { try { return JSON.parse(json) } catch { return [] } 
     <div v-else>
       <div v-for="o in orders" :key="o.id" class="order-card">
         <div class="o-head"><span class="o-no">订单号: {{ o.order_no }}</span><span class="o-status">{{ statusText(o.status) }}</span></div>
+        <div v-if="o.status === 'pending'" class="o-countdown" :class="{ 'timed-out': isTimedOut(o) }">{{ countdown(o) }}</div>
         <div v-for="(it, i) in parseItems(o.items_json)" :key="i" class="o-item">
           <van-image width="60" height="60" radius="6" :src="it.image" fit="cover" />
           <div class="oi-info"><div class="oi-name van-ellipsis">{{ it.name }}</div><div class="oi-price">¥{{ fmt(it.price) }} × {{ it.quantity }}</div></div>
@@ -63,6 +96,8 @@ function parseItems(json) { try { return JSON.parse(json) } catch { return [] } 
 .order-card { background: #fff; margin: 8px; border-radius: 8px; padding: 12px; }
 .o-head { display: flex; justify-content: space-between; font-size: 12px; color: #999; margin-bottom: 8px; }
 .o-status { color: #ff0036; }
+.o-countdown { color: #ff0036; font-size: 13px; font-weight: bold; margin-bottom: 8px; }
+.o-countdown.timed-out { color: #999; }
 .o-item { display: flex; gap: 10px; padding: 6px 0; }
 .oi-info { flex: 1; }
 .oi-name { font-size: 13px; }
