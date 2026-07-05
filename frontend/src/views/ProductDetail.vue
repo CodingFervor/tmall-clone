@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showDialog } from 'vant'
-import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock, getProductQA, askProductQA } from '../api'
+import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock, getProductQA, askProductQA, markReviewUseful } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -101,6 +101,11 @@ function selectSKU(sku) { selectedSKU.value = sku }
 function currentPrice() { return selectedSKU.value ? selectedSKU.value.price : (product.value ? product.value.price : 0) }
 function fmt(n) { return Number(n).toFixed(2) }
 function goProduct(id) { router.replace('/product/' + id); setTimeout(() => window.location.reload(), 50) }
+async function doUseful(r) {
+  if (!localStorage.getItem('tm_token')) { showDialog({ title: '提示', message: '请先登录' }).then(() => router.push('/login')); return }
+  try { await markReviewUseful(r.id); r.useful = (r.useful || 0) + 1; showSuccessToast('已标记有用') }
+  catch (e) { showToast('操作失败') }
+}
 function qrPattern(n) { const row = Math.floor((n - 1) / 8); const col = (n - 1) % 8; const corner = (row < 2 || row > 5) && (col < 2 || col > 5); return corner || ((row * 7 + col * 3 + n) % 3 === 0) }
 async function copyShareLink() { try { await navigator.clipboard.writeText(window.location.href); showSuccessToast('链接已复制') } catch (e) { showToast('复制失败') } }
 async function toggleRestock() {
@@ -205,6 +210,7 @@ function priceTrend() {
         <div v-if="r.images" class="rev-photos">
           <van-image v-for="(img, i) in r.images.split(',')" :key="i" width="72" height="72" radius="6" :src="img" fit="cover" />
         </div>
+        <div class="rev-actions"><span class="rev-useful-btn" @click="doUseful(r)"><van-icon name="good-job-o" /> 有用 ({{ r.useful || 0 }})</span></div>
         <div v-if="r.reply" class="rev-reply"><span class="rev-reply-name">{{ r.reply.username }}：</span>{{ r.reply.content }}</div>
         <div v-if="replyingTo === r.id" class="rev-reply-box">
           <van-field v-model="replyText" placeholder="写下你的回复..." />
@@ -325,6 +331,9 @@ function priceTrend() {
 .rev-user { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #666; }
 .rev-content { font-size: 13px; margin-top: 4px; line-height: 18px; }
 .rev-photos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.rev-actions { margin-top: 6px; }
+.rev-useful-btn { color: #999; font-size: 12px; cursor: pointer; }
+.rev-useful-btn:active { color: #ff0036; }
 .rev-reply-btn { margin-left: auto; color: #ff0036; font-size: 12px; }
 .rev-reply { background: #f7f7f7; border-radius: 6px; padding: 6px 10px; margin-top: 6px; font-size: 12px; color: #666; line-height: 18px; }
 .rev-reply-name { color: #ff0036; }

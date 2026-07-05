@@ -127,6 +127,7 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 
 			// Review replies
 			auth.POST("/reviews/reply", h.ReplyReview)
+			auth.POST("/reviews/:id/useful", h.MarkReviewUseful)
 
 			// Edit profile
 			auth.PUT("/auth/profile", h.UpdateProfile)

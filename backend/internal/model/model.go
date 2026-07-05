@@ -154,6 +154,7 @@ type Review struct {
 	Rating    int          `json:"rating"`
 	Content   string       `json:"content"`
 	Images    string       `json:"images"`
+	Useful    int          `json:"useful"` // helpful-vote count (评价有用)
 	CreatedAt time.Time    `json:"created_at"`
 	Reply     *ReviewReply `json:"reply,omitempty"` // merchant/owner response, if any
 }

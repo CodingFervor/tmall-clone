@@ -339,6 +339,24 @@ func (h *Handler) ReplyReview(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": rep})
 }
 
+// MarkReviewUseful: POST /reviews/:id/useful — vote a review as helpful (评价有用).
+func (h *Handler) MarkReviewUseful(c *gin.Context) {
+	_, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的ID"})
+		return
+	}
+	if err := h.Review.MarkUseful(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "操作失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "已标记有用"})
+}
+
 // ===================== Seckill deals (限时秒杀) =====================
 
 // ListSeckillDeals: GET /seckill (public)
