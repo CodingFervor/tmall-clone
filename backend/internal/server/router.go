@@ -51,6 +51,9 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 		// Public presale (预售定金) listing
 		api.GET("/presales", h.ListPresales)
 
+		// Public tiered-discount (阶梯满减) listing
+		api.GET("/tiered-discounts", h.ListTieredDiscounts)
+
 		api.GET("/shipments/track", h.TrackByNo)
 
 		auth := api.Group("/")

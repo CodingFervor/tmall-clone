@@ -454,6 +454,22 @@ func (h *Handler) PayPresaleDeposit(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": po, "message": "定金支付成功"})
 }
 
+// ===================== Tiered discounts (阶梯满减) =====================
+
+// ListTieredDiscounts: GET /tiered-discounts (public)
+func (h *Handler) ListTieredDiscounts(c *gin.Context) {
+	if h.Tiered == nil {
+		c.JSON(http.StatusOK, gin.H{"data": []any{}})
+		return
+	}
+	tiers, err := h.Tiered.ListActive()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": tiers})
+}
+
 // ===================== Price history (比价历史) =====================
 
 // ListPriceHistory: GET /products/:id/price-history (public)

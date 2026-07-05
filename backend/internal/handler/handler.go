@@ -42,6 +42,7 @@ type Handler struct {
 	Restock      *repository.RestockRepo
 	QA           *repository.QARepo
 	Invoice      *repository.InvoiceRepo
+	Tiered       *repository.TieredDiscountRepo
 	jwtKey       []byte
 }
 
@@ -102,6 +103,11 @@ func (h *Handler) SetQA(qa *repository.QARepo) {
 // SetInvoice attaches the order-invoice repo.
 func (h *Handler) SetInvoice(inv *repository.InvoiceRepo) {
 	h.Invoice = inv
+}
+
+// SetTiered attaches the tiered-discount (阶梯满减) repo.
+func (h *Handler) SetTiered(td *repository.TieredDiscountRepo) {
+	h.Tiered = td
 }
 
 // ---- JWT (HS256, hand-rolled) ----

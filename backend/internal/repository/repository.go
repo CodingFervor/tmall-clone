@@ -301,7 +301,7 @@ func NewCartRepo(db *sql.DB) *CartRepo { return &CartRepo{db: db} }
 func (r *CartRepo) List(userID int64) ([]model.CartItem, error) {
 	rows, err := r.db.Query(
 		`SELECT c.id, c.user_id, c.product_id, c.quantity, c.selected, c.created_at,
-		        p.name, p.image, p.price, p.stock
+		        p.name, p.image, p.price, p.original_price, p.stock
 		 FROM cart_items c JOIN products p ON p.id = c.product_id
 		 WHERE c.user_id=? ORDER BY c.id DESC`, userID)
 	if err != nil {
@@ -312,7 +312,7 @@ func (r *CartRepo) List(userID int64) ([]model.CartItem, error) {
 	for rows.Next() {
 		var c model.CartItem
 		if err := rows.Scan(&c.ID, &c.UserID, &c.ProductID, &c.Quantity, &c.Selected, &c.CreatedAt,
-			&c.ProductName, &c.ProductImg, &c.Price, &c.Stock); err == nil {
+			&c.ProductName, &c.ProductImg, &c.Price, &c.OriginalPrice, &c.Stock); err == nil {
 			out = append(out, c)
 		}
 	}
@@ -1572,4 +1572,48 @@ func defaultInt(n, d int) int {
 		return d
 	}
 	return n
+}
+
+// ===================== Tiered discounts (阶梯满减) =====================
+
+type TieredDiscountRepo struct{ db *sql.DB }
+
+func NewTieredDiscountRepo(db *sql.DB) *TieredDiscountRepo { return &TieredDiscountRepo{db: db} }
+
+// ListActive returns all active tiers ordered by threshold ascending.
+func (r *TieredDiscountRepo) ListActive() ([]model.TieredDiscount, error) {
+	rows, err := r.db.Query(
+		`SELECT id, threshold, discount, status FROM tiered_discounts WHERE status='active' ORDER BY threshold ASC, sort_order ASC, id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.TieredDiscount{}
+	for rows.Next() {
+		var t model.TieredDiscount
+		if err := rows.Scan(&t.ID, &t.Threshold, &t.Discount, &t.Status); err == nil {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
+
+// SeedTiers populates the default store-wide 阶梯满减 tiers if none exist yet.
+func (r *TieredDiscountRepo) SeedTiers() {
+	var n int
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM tiered_discounts`).Scan(&n)
+	if n > 0 {
+		return
+	}
+	tiers := []model.TieredDiscount{
+		{Threshold: 99, Discount: 5},
+		{Threshold: 199, Discount: 15},
+		{Threshold: 299, Discount: 30},
+		{Threshold: 499, Discount: 60},
+	}
+	for i, t := range tiers {
+		_, _ = r.db.Exec(
+			`INSERT INTO tiered_discounts (threshold, discount, status, sort_order) VALUES (?,?,?,?)`,
+			t.Threshold, t.Discount, "active", i)
+	}
 }

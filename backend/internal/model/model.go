@@ -126,16 +126,17 @@ type OrderInvoice struct {
 }
 
 type CartItem struct {
-	ID          int64     `json:"id"`
-	UserID      int64     `json:"user_id"`
-	ProductID   int64     `json:"product_id"`
-	Quantity    int       `json:"quantity"`
-	Selected    int       `json:"selected"`
-	ProductName string    `json:"product_name"`
-	ProductImg  string    `json:"product_image"`
-	Price       float64   `json:"price"`
-	Stock       int       `json:"stock"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID            int64     `json:"id"`
+	UserID        int64     `json:"user_id"`
+	ProductID     int64     `json:"product_id"`
+	Quantity      int       `json:"quantity"`
+	Selected      int       `json:"selected"`
+	ProductName   string    `json:"product_name"`
+	ProductImg    string    `json:"product_image"`
+	Price         float64   `json:"price"`
+	OriginalPrice float64   `json:"original_price"`
+	Stock         int       `json:"stock"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type Order struct {
@@ -393,6 +394,14 @@ type UserCoupon struct {
 	IsUsed    int       `json:"is_used"`
 	Coupon    *Coupon   `json:"coupon"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// TieredDiscount is one tier of the store-wide 阶梯满减 promotion (阶梯满减).
+type TieredDiscount struct {
+	ID        int64   `json:"id"`
+	Threshold float64 `json:"threshold"`
+	Discount  float64 `json:"discount"`
+	Status    string  `json:"status"`
 }
 
 // ---- Request DTOs ----

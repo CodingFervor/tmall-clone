@@ -135,6 +135,9 @@ export const createShopRating = (name, payload) => http.post(`/shops/${encodeURI
 // ---- Bundles (组合套餐) ----
 export const getBundles = () => http.get('/bundles').then((r) => r.data.data)
 
+// ---- Tiered discounts (阶梯满减) ----
+export const getTieredDiscounts = () => http.get('/tiered-discounts').then((r) => r.data.data)
+
 // ---- Restock alerts (到货通知) ----
 export const checkRestock = (id) => http.get(`/products/${id}/restock`).then((r) => r.data.subscribed)
 export const subscribeRestock = (id) => http.post(`/products/${id}/restock`).then((r) => r.data)

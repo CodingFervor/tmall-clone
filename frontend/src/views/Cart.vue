@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
-import { getCart, updateCart, deleteCart, createOrder, getMyCoupons, getAddresses, requestInvoice } from '../api'
+import { getCart, updateCart, deleteCart, createOrder, getMyCoupons, getAddresses, requestInvoice, getTieredDiscounts } from '../api'
 
 const router = useRouter()
 const items = ref([])
@@ -24,6 +24,8 @@ const invoiceType = ref('personal')
 const invoiceTitle = ref('')
 const invoiceTaxNo = ref('')
 const invoiceEmail = ref('')
+// Tiered discounts (阶梯满减) — store-wide promotion tiers.
+const tiers = ref([])
 
 const usableCoupons = computed(() =>
   (coupons.value || []).filter((c) => c.is_used === 0 && (!c.coupon || selectedTotal.value >= c.coupon.threshold))
@@ -47,20 +49,39 @@ const topupHints = computed(() => {
   }
   return hints.sort((a, b) => a.diff - b.diff)
 })
+// Tiered discount summary (阶梯满减) — active tiers joined with " | ".
+const tierSummary = computed(() =>
+  (tiers.value || []).map((t) => `满${Math.round(t.threshold)}减${Math.round(t.discount)}`).join(' | ')
+)
+// The next unreached tier above the current selected subtotal (再买¥X减¥Y).
+const nextTier = computed(() => {
+  for (const t of tiers.value || []) {
+    if (selectedTotal.value < t.threshold) {
+      return { diff: Math.ceil(t.threshold - selectedTotal.value), discount: t.discount, threshold: t.threshold }
+    }
+  }
+  return null
+})
+// Whether a cart item has dropped in price (降价 tag) — original_price > price * 1.1.
+function isPriceDrop(item) {
+  return item.original_price && item.original_price > item.price * 1.1
+}
 
 async function load() {
   loading.value = true
   try {
-    const [cartRes, myCoupons, addrList] = await Promise.all([
+    const [cartRes, myCoupons, addrList, tierList] = await Promise.all([
       getCart(),
       getMyCoupons().catch(() => []),
       getAddresses().catch(() => []),
+      getTieredDiscounts().catch(() => []),
     ])
     items.value = cartRes.data || []
     selectedTotal.value = cartRes.selected_total || 0
     allSelected.value = items.value.length > 0 && items.value.every((i) => i.selected === 1)
     coupons.value = myCoupons || []
     addresses.value = addrList || []
+    tiers.value = tierList || []
     // Default to the marked default address (or the first).
     if (selectedAddressId.value === null) {
       const def = addresses.value.find((a) => a.is_default === 1) || addresses.value[0]
@@ -154,7 +175,7 @@ function fmt(n) { return Number(n).toFixed(2) }
         <van-image width="80" height="80" radius="6" :src="it.product_image" fit="cover" @click="router.push('/product/' + it.product_id)" />
         <div class="ci-info">
           <div class="ci-name van-multi-ellipsis--l2">{{ it.product_name }}</div>
-          <div class="ci-bottom"><span class="price">¥{{ fmt(it.price) }}</span><van-stepper v-model="it.quantity" :min="1" :max="it.stock" @change="(v) => changeQty(it, v)" /><van-icon name="delete-o" size="20" @click="removeItem(it)" /></div>
+          <div class="ci-bottom"><span class="price">¥{{ fmt(it.price) }}</span><van-tag v-if="isPriceDrop(it)" type="danger" size="medium" round>降价</van-tag><van-stepper v-model="it.quantity" :min="1" :max="it.stock" @change="(v) => changeQty(it, v)" /><van-icon name="delete-o" size="20" @click="removeItem(it)" /></div>
         </div>
       </div>
       <!-- Coupon selector -->
@@ -187,6 +208,12 @@ function fmt(n) { return Number(n).toFixed(2) }
         <div v-for="h in topupHints.slice(0, 2)" :key="h.id" class="th-item">💡 再买 <b>¥{{ h.diff }}</b> 可使用 {{ h.label }}，<span class="th-go" @click="router.push('/home')">去凑单 ›</span></div>
       </div>
       <div v-if="discount > 0" class="discount-line">优惠券抵扣 -¥{{ fmt(discount) }}</div>
+      <!-- Tiered discount banner (阶梯满减) -->
+      <div v-if="tierSummary" class="tier-banner">
+        <span class="tier-icon">🎁</span>
+        <span class="tier-summary">{{ tierSummary }}</span>
+        <span v-if="nextTier" class="tier-next">再买<b>¥{{ nextTier.diff }}</b>减¥{{ nextTier.discount }}</span>
+      </div>
       <van-submit-bar :price="finalTotal * 100" :button-text="'结算 (' + selectedCount + '件)'" @submit="checkout"><van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox></van-submit-bar>
 
       <van-popup v-model:show="showCouponPicker" position="bottom" round>
@@ -255,6 +282,11 @@ function fmt(n) { return Number(n).toFixed(2) }
 .ci-bottom { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .ci-bottom .price { font-size: 16px; flex: 1; }
 .discount-line { color: #ff0036; font-size: 13px; text-align: right; padding: 6px 16px; background: #fff; }
+.tier-banner { display: flex; align-items: center; gap: 8px; background: linear-gradient(90deg, #fff0f3, #fff6e6); color: #ff0036; font-size: 12px; padding: 8px 12px; margin: 8px 0; border-radius: 8px; line-height: 18px; }
+.tier-icon { font-size: 14px; }
+.tier-summary { flex: 1; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tier-next { color: #996600; flex-shrink: 0; }
+.tier-next b { color: #ff0036; }
 .topup-hints { padding: 0 16px 8px; }
 .th-item { background: #fff8e6; color: #996600; font-size: 12px; padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; line-height: 18px; }
 .th-item b { color: #ff0036; }

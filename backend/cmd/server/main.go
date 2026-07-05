@@ -84,6 +84,10 @@ func main() {
 	repository.SeedVIPPrices(db.DB)
 	// Attach the order-invoice (发票) repo.
 	h.SetInvoice(repository.NewInvoiceRepo(db.DB))
+	// Attach + seed the tiered-discount (阶梯满减) repo.
+	tieredRepo := repository.NewTieredDiscountRepo(db.DB)
+	tieredRepo.SeedTiers()
+	h.SetTiered(tieredRepo)
 
 	_ = os.MkdirAll("data/images", 0o755)
 
