@@ -113,6 +113,18 @@ type ProductQA struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// OrderInvoice is an electronic invoice requested for a paid order (发票).
+type OrderInvoice struct {
+	ID          int64  `json:"id"`
+	OrderID     int64  `json:"order_id"`
+	UserID      int64  `json:"user_id"`
+	InvoiceType string `json:"invoice_type"`
+	Title       string `json:"title"`
+	TaxNo       string `json:"tax_no"`
+	Email       string `json:"email"`
+	Status      string `json:"status"`
+}
+
 type CartItem struct {
 	ID          int64     `json:"id"`
 	UserID      int64     `json:"user_id"`

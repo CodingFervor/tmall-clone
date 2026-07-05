@@ -658,3 +658,66 @@ func (h *Handler) AnswerQA(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "已回答"})
 }
+
+// ===================== Order invoices (发票) =====================
+
+// RequestInvoice: POST /orders/:id/invoice — request an electronic invoice (requires auth).
+func (h *Handler) RequestInvoice(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的订单ID"})
+		return
+	}
+	o, err := h.Order.Get(id, uid)
+	if err != nil || o == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "订单不存在"})
+		return
+	}
+	var req struct {
+		InvoiceType string `json:"invoice_type"`
+		Title       string `json:"title"`
+		TaxNo       string `json:"tax_no"`
+		Email       string `json:"email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数不合法"})
+		return
+	}
+	inv := &model.OrderInvoice{
+		OrderID:     id,
+		UserID:      uid,
+		InvoiceType: req.InvoiceType,
+		Title:       req.Title,
+		TaxNo:       req.TaxNo,
+		Email:       req.Email,
+		Status:      "issued",
+	}
+	if err := h.Invoice.Create(inv); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "开票失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": inv, "message": "发票已开具"})
+}
+
+// GetInvoice: GET /orders/:id/invoice — fetch the invoice for an order (requires auth).
+func (h *Handler) GetInvoice(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的订单ID"})
+		return
+	}
+	inv, err := h.Invoice.GetByOrder(id, uid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": inv})
+}

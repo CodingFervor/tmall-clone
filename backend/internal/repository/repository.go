@@ -1507,6 +1507,48 @@ func (r *QARepo) Answer(id int64, answer, answerer string) error {
 	return err
 }
 
+// ===================== Order invoices (发票) =====================
+
+type InvoiceRepo struct{ db *sql.DB }
+
+func NewInvoiceRepo(db *sql.DB) *InvoiceRepo { return &InvoiceRepo{db: db} }
+
+// Create inserts a new invoice record for an order.
+func (r *InvoiceRepo) Create(inv *model.OrderInvoice) error {
+	if inv.InvoiceType == "" {
+		inv.InvoiceType = "personal"
+	}
+	if inv.Status == "" {
+		inv.Status = "issued"
+	}
+	res, err := r.db.Exec(
+		`INSERT INTO order_invoices (order_id, user_id, invoice_type, title, tax_no, email, status) VALUES (?,?,?,?,?,?,?)`,
+		inv.OrderID, inv.UserID, inv.InvoiceType, inv.Title, inv.TaxNo, inv.Email, inv.Status)
+	if err != nil {
+		return err
+	}
+	inv.ID, _ = res.LastInsertId()
+	return nil
+}
+
+// GetByOrder loads the invoice for an order; userID>0 enforces ownership.
+func (r *InvoiceRepo) GetByOrder(orderID, userID int64) (*model.OrderInvoice, error) {
+	inv := &model.OrderInvoice{}
+	err := r.db.QueryRow(
+		`SELECT id, order_id, user_id, invoice_type, title, tax_no, email, status FROM order_invoices WHERE order_id=?`, orderID,
+	).Scan(&inv.ID, &inv.OrderID, &inv.UserID, &inv.InvoiceType, &inv.Title, &inv.TaxNo, &inv.Email, &inv.Status)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if userID > 0 && inv.UserID != userID {
+		return nil, nil
+	}
+	return inv, nil
+}
+
 func SeedVIPPrices(db *sql.DB) {
 	var n int
 	_ = db.QueryRow(`SELECT COUNT(*) FROM products WHERE vip_price > 0`).Scan(&n)

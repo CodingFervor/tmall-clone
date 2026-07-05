@@ -143,3 +143,7 @@ export const unsubscribeRestock = (id) => http.delete(`/products/${id}/restock`)
 // ---- Product Q&A (商品问答) ----
 export const getProductQA = (id) => http.get(`/products/${id}/qa`).then((r) => r.data.data)
 export const askProductQA = (id, question) => http.post(`/products/${id}/qa`, { question }).then((r) => r.data.data)
+
+// ---- Order invoices (发票) ----
+export const getInvoice = (orderId) => http.get(`/orders/${orderId}/invoice`).then((r) => r.data.data)
+export const requestInvoice = (orderId, payload) => http.post(`/orders/${orderId}/invoice`, payload).then((r) => r.data)

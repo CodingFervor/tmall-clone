@@ -383,6 +383,19 @@ func createTables() error {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_qa_product ON product_qa(product_id)`,
+		// Order invoices: an electronic invoice requested for a paid order (发票).
+		`CREATE TABLE IF NOT EXISTS order_invoices (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			order_id INTEGER NOT NULL,
+			user_id INTEGER NOT NULL,
+			invoice_type TEXT NOT NULL DEFAULT 'personal',
+			title TEXT NOT NULL DEFAULT '',
+			tax_no TEXT NOT NULL DEFAULT '',
+			email TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'issued',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_invoices_user ON order_invoices(user_id)`,
 		// FTS5.
 		`CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(name, subtitle, category, tags, description, content='products', content_rowid='id')`,
 		`CREATE TRIGGER IF NOT EXISTS products_ai AFTER INSERT ON products BEGIN

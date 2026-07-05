@@ -82,6 +82,8 @@ func main() {
 	// Attach the Q&A repo + seed VIP prices.
 	h.SetQA(repository.NewQARepo(db.DB))
 	repository.SeedVIPPrices(db.DB)
+	// Attach the order-invoice (发票) repo.
+	h.SetInvoice(repository.NewInvoiceRepo(db.DB))
 
 	_ = os.MkdirAll("data/images", 0o755)
 

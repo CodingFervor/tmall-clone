@@ -69,6 +69,10 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 			auth.POST("/products/:id/qa", h.AskQA)
 			auth.POST("/qa/:id/answer", h.AnswerQA)
 
+			// Order invoices (发票)
+			auth.GET("/orders/:id/invoice", h.GetInvoice)
+			auth.POST("/orders/:id/invoice", h.RequestInvoice)
+
 			auth.GET("/cart", h.ListCart)
 			auth.POST("/cart", h.AddCart)
 			auth.PUT("/cart/:id", h.UpdateCart)
