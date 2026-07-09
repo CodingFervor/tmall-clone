@@ -12,6 +12,11 @@ const activeId = ref(0)
 const loading = ref(false)
 const sortBy = ref('default')
 
+// Product compare (商品对比): track up to 2 selected products.
+const compareList = ref([])
+const showCompare = ref(false)
+const MAX_COMPARE = 2
+
 onMounted(async () => {
   try { cats.value = await getCategories(); if (cats.value.length) activeId.value = route.query.id ? Number(route.query.id) : cats.value[0].id }
   catch (e) { showToast('加载失败') }
@@ -31,6 +36,30 @@ const filteredProducts = computed(() => {
 })
 
 function fmt(n) { return Number(n).toFixed(2) }
+
+function isInCompare(p) { return compareList.value.some(c => c.id === p.id) }
+function toggleCompare(p) {
+  const idx = compareList.value.findIndex(c => c.id === p.id)
+  if (idx >= 0) {
+    compareList.value.splice(idx, 1)
+    return
+  }
+  if (compareList.value.length >= MAX_COMPARE) {
+    showToast('最多对比2件商品')
+    return
+  }
+  compareList.value.push(p)
+}
+function clearCompare() { compareList.value = [] }
+function openCompare() { if (compareList.value.length === MAX_COMPARE) showCompare.value = true }
+// Lower price wins -> highlight in red. -1 if incomparable / equal.
+function cheaperIndex() {
+  if (compareList.value.length !== 2) return -1
+  const a = Number(compareList.value[0].price)
+  const b = Number(compareList.value[1].price)
+  if (isNaN(a) || isNaN(b) || a === b) return -1
+  return a < b ? 0 : 1
+}
 </script>
 
 <template>
@@ -49,18 +78,52 @@ function fmt(n) { return Number(n).toFixed(2) }
         </div>
         <div v-if="loading" class="loading"><van-loading /></div>
         <div v-else>
-          <div v-for="p in filteredProducts" :key="p.id" class="prod-row" @click="router.push('/product/' + p.id)">
+          <div v-for="p in filteredProducts" :key="p.id" class="prod-row" :class="{ selected: isInCompare(p) }" @click="router.push('/product/' + p.id)">
             <van-image width="100" height="100" radius="6" :src="p.image" fit="cover" />
             <div class="prod-info">
               <div class="prod-name van-multi-ellipsis--l2">{{ p.name }}</div>
               <div class="prod-sub van-ellipsis">{{ p.subtitle }}</div>
-              <div class="prod-bottom"><span class="prod-price">¥{{ fmt(p.price) }}</span><span class="prod-sales">{{ p.sales }}人付款</span></div>
+              <div class="prod-bottom"><span class="prod-price">¥{{ fmt(p.price) }}</span><span class="prod-sales">{{ p.sales }}人付款</span>
+                <span class="cmp-btn" :class="{ active: isInCompare(p) }" @click.stop="toggleCompare(p)">对比</span>
+              </div>
             </div>
           </div>
           <van-empty v-if="!filteredProducts.length" description="暂无商品" />
         </div>
       </div>
     </div>
+    <!-- Floating compare button: appears when 2 products are selected. -->
+    <div v-if="compareList.length === MAX_COMPARE" class="cmp-fab" @click="openCompare">
+      <span class="cmp-fab-icon">⇄</span>
+      <span class="cmp-fab-text">对比({{ compareList.length }})</span>
+    </div>
+    <!-- Compare popup: side-by-side table highlighting the cheaper price. -->
+    <van-popup v-model:show="showCompare" round position="bottom" :style="{ height: '70%' }" closeable>
+      <div class="cmp-popup">
+        <div class="cmp-popup-title">商品对比</div>
+        <div v-if="compareList.length === 2" class="cmp-table">
+          <div class="cmp-col cmp-label">
+            <div class="cmp-cell cmp-cell-img"></div>
+            <div class="cmp-cell">商品名称</div>
+            <div class="cmp-cell">现价</div>
+            <div class="cmp-cell">原价</div>
+            <div class="cmp-cell">店铺</div>
+            <div class="cmp-cell">销量</div>
+          </div>
+          <div v-for="(p, idx) in compareList" :key="p.id" class="cmp-col">
+            <div class="cmp-cell cmp-cell-img"><van-image width="80" height="80" radius="6" :src="p.image" fit="cover" /></div>
+            <div class="cmp-cell cmp-cell-name">{{ p.name }}</div>
+            <div class="cmp-cell" :class="{ cheaper: cheaperIndex() === idx }">¥{{ fmt(p.price) }}</div>
+            <div class="cmp-cell" :class="{ cheaper: cheaperIndex() === idx }">¥{{ fmt(p.original_price) }}</div>
+            <div class="cmp-cell">{{ p.shop || '—' }}</div>
+            <div class="cmp-cell">{{ p.sales }}人付款</div>
+          </div>
+        </div>
+        <div class="cmp-actions">
+          <van-button block round type="danger" @click="clearCompare(); showCompare = false">清空</van-button>
+        </div>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -83,4 +146,22 @@ function fmt(n) { return Number(n).toFixed(2) }
 .prod-price { color: #ff0036; font-weight: bold; font-size: 16px; }
 .prod-sales { font-size: 11px; color: #999; }
 .loading { text-align: center; padding: 40px; }
+/* Product compare (商品对比) */
+.prod-row.selected { background: #fff0f3; }
+.cmp-btn { margin-left: auto; padding: 2px 10px; font-size: 11px; color: #ff0036; border: 1px solid #ff0036; border-radius: 10px; line-height: 16px; cursor: pointer; }
+.cmp-btn.active { background: #ff0036; color: #fff; }
+.cmp-fab { position: fixed; right: 16px; bottom: 80px; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 50%; background: #ff0036; color: #fff; box-shadow: 0 2px 10px rgba(255, 0, 54, 0.4); cursor: pointer; }
+.cmp-fab-icon { font-size: 20px; line-height: 1; }
+.cmp-fab-text { font-size: 10px; margin-top: 2px; }
+.cmp-popup { padding: 16px; padding-top: 28px; height: 100%; display: flex; flex-direction: column; }
+.cmp-popup-title { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 12px; }
+.cmp-table { display: flex; flex: 1; overflow-y: auto; }
+.cmp-col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.cmp-col.cmp-label { flex: 0 0 60px; align-items: stretch; text-align: left; }
+.cmp-col.cmp-label .cmp-cell { color: #999; font-size: 12px; align-items: center; justify-content: flex-end; text-align: right; padding-right: 8px; }
+.cmp-cell { min-height: 84px; padding: 8px 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #333; border-bottom: 1px solid #f5f5f5; width: 100%; }
+.cmp-cell-img { min-height: 92px; }
+.cmp-cell-name { font-size: 13px; }
+.cmp-cell.cheaper { color: #ff0036; font-weight: bold; }
+.cmp-actions { padding-top: 12px; }
 </style>

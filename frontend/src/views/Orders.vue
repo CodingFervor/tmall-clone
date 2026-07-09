@@ -77,6 +77,19 @@ async function onSelectRefundType(action) {
 function statusText(s) { return { pending: '待付款', paid: '已付款', shipped: '已发货', completed: '已完成', cancelled: '已取消' }[s] || s }
 function fmt(n) { return Number(n).toFixed(2) }
 function parseItems(json) { try { return JSON.parse(json) } catch { return [] } }
+// Group an order's items into shipment packages (拆包发货) by shop.
+// Returns an array of { shop, items }. Items without a shop fall into a single group.
+function packagesOf(o) {
+  const items = parseItems(o.items_json)
+  const order = []
+  const map = {}
+  for (const it of items) {
+    const key = it.shop || ''
+    if (!(key in map)) { map[key] = []; order.push(key) }
+    map[key].push(it)
+  }
+  return order.map(k => ({ shop: k, items: map[k] }))
+}
 </script>
 
 <template>
@@ -88,10 +101,23 @@ function parseItems(json) { try { return JSON.parse(json) } catch { return [] } 
       <div v-for="o in orders" :key="o.id" class="order-card">
         <div class="o-head"><span class="o-no">订单号: {{ o.order_no }}</span><span class="o-status">{{ statusText(o.status) }}</span></div>
         <div v-if="o.status === 'pending'" class="o-countdown" :class="{ 'timed-out': isTimedOut(o) }">{{ countdown(o) }}</div>
-        <div v-for="(it, i) in parseItems(o.items_json)" :key="i" class="o-item">
-          <van-image width="60" height="60" radius="6" :src="it.image" fit="cover" />
-          <div class="oi-info"><div class="oi-name van-ellipsis">{{ it.name }}</div><div class="oi-price">¥{{ fmt(it.price) }} × {{ it.quantity }}</div></div>
-        </div>
+        <!-- Multi-package shipment (拆包发货): when an order spans 2+ shops, show per-package groups. -->
+        <template v-if="packagesOf(o).length >= 2">
+          <div v-for="(pkg, pi) in packagesOf(o)" :key="pi" class="pkg-block">
+            <div class="pkg-head"><span class="pkg-title">📦 包裹{{ pi + 1 }}</span><span v-if="pkg.shop" class="pkg-shop van-ellipsis">{{ pkg.shop }}</span></div>
+            <div v-for="(it, i) in pkg.items" :key="i" class="o-item">
+              <van-image width="60" height="60" radius="6" :src="it.image" fit="cover" />
+              <div class="oi-info"><div class="oi-name van-ellipsis">{{ it.name }}</div><div class="oi-price">¥{{ fmt(it.price) }} × {{ it.quantity }}</div></div>
+            </div>
+          </div>
+        </template>
+        <!-- Single shop (or no shop info): normal flat list. -->
+        <template v-else>
+          <div v-for="(it, i) in parseItems(o.items_json)" :key="i" class="o-item">
+            <van-image width="60" height="60" radius="6" :src="it.image" fit="cover" />
+            <div class="oi-info"><div class="oi-name van-ellipsis">{{ it.name }}</div><div class="oi-price">¥{{ fmt(it.price) }} × {{ it.quantity }}</div></div>
+          </div>
+        </template>
         <div class="o-foot">
           <span>共 {{ parseItems(o.items_json).length }} 件 合计: <b class="price">¥{{ fmt(o.total) }}</b></span>
           <div class="o-actions">
@@ -117,6 +143,10 @@ function parseItems(json) { try { return JSON.parse(json) } catch { return [] } 
 .o-countdown { color: #ff0036; font-size: 13px; font-weight: bold; margin-bottom: 8px; }
 .o-countdown.timed-out { color: #999; }
 .o-item { display: flex; gap: 10px; padding: 6px 0; }
+.pkg-block { border: 1px solid #ffe0e8; border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #fff8fa; }
+.pkg-head { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px dashed #ffd6df; }
+.pkg-title { font-size: 13px; font-weight: bold; color: #ff0036; }
+.pkg-shop { font-size: 12px; color: #666; flex: 1; }
 .oi-info { flex: 1; }
 .oi-name { font-size: 13px; }
 .oi-price { color: #999; font-size: 12px; margin-top: 4px; }

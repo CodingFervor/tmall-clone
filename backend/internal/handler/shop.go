@@ -190,6 +190,7 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 		Image     string  `json:"image"`
 		Price     float64 `json:"price"`
 		Quantity  int     `json:"quantity"`
+		Shop      string  `json:"shop"`
 	}
 	var lines []line
 	total := 0.0
@@ -198,7 +199,7 @@ func (h *Handler) CreateOrder(c *gin.Context) {
 		if p == nil {
 			continue
 		}
-		lines = append(lines, line{ProductID: p.ID, Name: p.Name, Image: p.Image, Price: p.Price, Quantity: it.Quantity})
+		lines = append(lines, line{ProductID: p.ID, Name: p.Name, Image: p.Image, Price: p.Price, Quantity: it.Quantity, Shop: p.Shop})
 		total += p.Price * float64(it.Quantity)
 	}
 	itemsJSON, _ := json.Marshal(lines)
