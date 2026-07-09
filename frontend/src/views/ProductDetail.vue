@@ -137,6 +137,13 @@ function priceTrend() {
   if (last > first) return 'up'
   return 'flat'
 }
+// Delivery estimation (预计送达): order before 11:00 → 今日达, before 17:00 → 明日达, else 后天达.
+function deliveryEstimate() {
+  const h = new Date().getHours()
+  if (h < 11) return '今日达'
+  if (h < 17) return '明日达'
+  return '后天达'
+}
 </script>
 
 <template>
@@ -172,6 +179,11 @@ function priceTrend() {
       <van-cell title="店铺" :value="product.shop" is-link v-else @click="router.push('/shop/' + encodeURIComponent(product.shop))" />
       <van-cell title="销量" :value="product.sales + '人付款'" />
       <van-cell title="标签" :value="product.tags || '正品保障'" />
+      <van-cell title="预计送达">
+        <template #value>
+          <span class="delivery-est"><span class="delivery-icon">🚚</span> {{ deliveryEstimate() }}</span>
+        </template>
+      </van-cell>
       <van-cell :title="restockSubscribed ? '到货通知已开启' : '到货通知'" @click="toggleRestock">
         <template #right-icon><van-switch :model-value="restockSubscribed" size="20" @click.stop="toggleRestock" active-color="#ff0036" /></template>
       </van-cell>
@@ -322,6 +334,8 @@ function priceTrend() {
 .trend.down { color: #07c160; }
 .trend.up { color: #ff0036; }
 .trend.flat { color: #999; }
+.delivery-est { color: #ff0036; font-size: 13px; font-weight: bold; }
+.delivery-icon { margin-right: 2px; }
 .ph-chart { display: flex; align-items: flex-end; gap: 6px; height: 80px; }
 .ph-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
 .ph-bar { width: 60%; background: linear-gradient(180deg, #ff9800, #ff0036); border-radius: 3px 3px 0 0; min-height: 8px; }

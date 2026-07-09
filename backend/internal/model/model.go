@@ -404,6 +404,16 @@ type TieredDiscount struct {
 	Status    string  `json:"status"`
 }
 
+// LotteryPrize is one segment of the points lottery wheel (积分大转盘).
+type LotteryPrize struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	PointsCost  int    `json:"points_cost"`
+	Prize       string `json:"prize"`
+	Probability int    `json:"probability"`
+	Icon        string `json:"icon"`
+}
+
 // ---- Request DTOs ----
 
 type LoginRequest struct {

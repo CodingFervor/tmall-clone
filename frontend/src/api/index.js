@@ -138,6 +138,10 @@ export const getBundles = () => http.get('/bundles').then((r) => r.data.data)
 // ---- Tiered discounts (阶梯满减) ----
 export const getTieredDiscounts = () => http.get('/tiered-discounts').then((r) => r.data.data)
 
+// ---- Lottery wheel (积分大转盘) ----
+export const getPrizes = () => http.get('/lottery/prizes').then((r) => r.data)
+export const spinLottery = () => http.post('/lottery/spin').then((r) => r.data)
+
 // ---- Restock alerts (到货通知) ----
 export const checkRestock = (id) => http.get(`/products/${id}/restock`).then((r) => r.data.subscribed)
 export const subscribeRestock = (id) => http.post(`/products/${id}/restock`).then((r) => r.data)

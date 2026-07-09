@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/CodingFervor/tmall-clone/backend/internal/model"
@@ -1556,6 +1557,127 @@ func SeedVIPPrices(db *sql.DB) {
 		return
 	}
 	_, _ = db.Exec(`UPDATE products SET vip_price = ROUND(price * 0.95, 2) WHERE vip_price = 0`)
+}
+
+// ===================== Lottery wheel (积分大转盘) =====================
+
+type LotteryRepo struct{ db *sql.DB }
+
+func NewLotteryRepo(db *sql.DB) *LotteryRepo { return &LotteryRepo{db: db} }
+
+// List returns all lottery prize segments ordered by id.
+func (r *LotteryRepo) List() ([]model.LotteryPrize, error) {
+	rows, err := r.db.Query(
+		`SELECT id, name, points_cost, prize, probability, icon FROM lottery_prizes ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.LotteryPrize{}
+	for rows.Next() {
+		var p model.LotteryPrize
+		if err := rows.Scan(&p.ID, &p.Name, &p.PointsCost, &p.Prize, &p.Probability, &p.Icon); err == nil {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+// AvailablePoints reports a user's redeemable balance (earned minus spent).
+// It mirrors PointShopRepo.AvailablePoints so a single points pool is shared.
+func (r *LotteryRepo) AvailablePoints(userID int64) int {
+	var earned, spent int
+	_ = r.db.QueryRow(`SELECT COALESCE(SUM(points), 0) FROM check_ins WHERE user_id=?`, userID).Scan(&earned)
+	_ = r.db.QueryRow(`SELECT COALESCE(SUM(points_cost), 0) FROM redemptions WHERE user_id=?`, userID).Scan(&spent)
+	bal := earned - spent
+	if bal < 0 {
+		bal = 0
+	}
+	return bal
+}
+
+// Spin performs a weighted-random draw and charges the user's points balance.
+// It records the result as a redemption row so the shared points pool stays
+// consistent with the points mall. Returns the winning prize.
+func (r *LotteryRepo) Spin(userID int64) (*model.LotteryPrize, error) {
+	prizes, err := r.List()
+	if err != nil {
+		return nil, err
+	}
+	if len(prizes) == 0 {
+		return nil, fmt.Errorf("暂无奖品")
+	}
+	// Determine the cost of a single draw (use the first prize's cost as the
+	// standard spin price, consistent across segments).
+	cost := prizes[0].PointsCost
+	if cost <= 0 {
+		cost = 50
+	}
+	if r.AvailablePoints(userID) < cost {
+		return nil, fmt.Errorf("积分不足")
+	}
+	// Weighted random pick: build a cumulative weight slice and roll.
+	total := 0
+	for _, p := range prizes {
+		if p.Probability > 0 {
+			total += p.Probability
+		}
+	}
+	if total == 0 {
+		total = len(prizes)
+	}
+	roll := rand.Intn(total)
+	var winner model.LotteryPrize
+	acc := 0
+	for _, p := range prizes {
+		w := p.Probability
+		if w <= 0 {
+			w = 1
+		}
+		acc += w
+		if roll < acc {
+			winner = p
+			break
+		}
+	}
+	// Charge the spin cost by recording a redemption against the shared pool.
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(
+		`INSERT INTO redemptions (user_id, product_id, points_cost, status) VALUES (?,?,?,?)`,
+		userID, 0, cost, "lottery"); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &winner, nil
+}
+
+// SeedPrizes populates the lottery wheel with tmall-flavored demo prizes if empty.
+// The prize set mirrors the JD points mall but swaps JD PLUS for 88VIP.
+func (r *LotteryRepo) SeedPrizes() {
+	var n int
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM lottery_prizes`).Scan(&n)
+	if n > 0 {
+		return
+	}
+	items := []model.LotteryPrize{
+		{Name: "天猫10元无门槛券", PointsCost: 50, Prize: "10元无门槛优惠券", Probability: 25, Icon: "🎫"},
+		{Name: "88VIP月卡", PointsCost: 50, Prize: "88VIP会员月卡", Probability: 2, Icon: "👑"},
+		{Name: "天猫50元满减红包", PointsCost: 50, Prize: "50元满减红包", Probability: 8, Icon: "🧧"},
+		{Name: "100M流量包", PointsCost: 50, Prize: "100M手机流量包", Probability: 20, Icon: "📱"},
+		{Name: "品牌美妆小样", PointsCost: 50, Prize: "美妆小样套装", Probability: 10, Icon: "💄"},
+		{Name: "谢谢参与", PointsCost: 50, Prize: "下次再来", Probability: 35, Icon: "🌱"},
+	}
+	for _, it := range items {
+		_, _ = r.db.Exec(
+			`INSERT INTO lottery_prizes (name, points_cost, prize, probability, icon) VALUES (?,?,?,?,?)`,
+			it.Name, it.PointsCost, it.Prize, it.Probability, it.Icon)
+	}
 }
 
 // ===================== helpers =====================

@@ -88,6 +88,10 @@ func main() {
 	tieredRepo := repository.NewTieredDiscountRepo(db.DB)
 	tieredRepo.SeedTiers()
 	h.SetTiered(tieredRepo)
+	// Attach + seed the lottery-wheel (积分大转盘) repo.
+	lotteryRepo := repository.NewLotteryRepo(db.DB)
+	lotteryRepo.SeedPrizes()
+	h.SetLottery(lotteryRepo)
 
 	_ = os.MkdirAll("data/images", 0o755)
 

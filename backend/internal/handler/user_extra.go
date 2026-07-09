@@ -470,6 +470,46 @@ func (h *Handler) ListTieredDiscounts(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": tiers})
 }
 
+// ===================== Lottery wheel (积分大转盘) =====================
+
+// ListLotteryPrizes: GET /lottery/prizes — list the wheel's prize segments
+// (public so the wheel can render before login; points are optional).
+func (h *Handler) ListLotteryPrizes(c *gin.Context) {
+	uid, _ := h.currentUserID(c, true)
+	if h.Lottery == nil {
+		c.JSON(http.StatusOK, gin.H{"data": []any{}, "points": 0})
+		return
+	}
+	list, err := h.Lottery.List()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询失败"})
+		return
+	}
+	points := 0
+	if uid > 0 {
+		points = h.Lottery.AvailablePoints(uid)
+	}
+	c.JSON(http.StatusOK, gin.H{"data": list, "points": points})
+}
+
+// SpinLottery: POST /lottery/spin — draw a weighted-random prize (requires auth).
+func (h *Handler) SpinLottery(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	if h.Lottery == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "活动未开启"})
+		return
+	}
+	prize, err := h.Lottery.Spin(uid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": prize, "points": h.Lottery.AvailablePoints(uid)})
+}
+
 // ===================== Price history (比价历史) =====================
 
 // ListPriceHistory: GET /products/:id/price-history (public)
