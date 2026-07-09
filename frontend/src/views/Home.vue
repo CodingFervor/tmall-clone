@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { getProducts, getBrands, getCategories } from '../api'
@@ -9,6 +9,34 @@ const products = ref([])
 const brands = ref([])
 const categories = ref([])
 const loading = ref(false)
+
+// ---- 限时抢购倒计时 (flash sale countdown to next top-of-hour) ----
+const countdown = ref('00:00:00')
+const flashing = ref(false) // "正在抢购中!" brief state at 0
+let timer = null
+let flashTimer = null
+
+function tick() {
+  const now = new Date()
+  const next = new Date(now)
+  next.setMinutes(0, 0, 0)
+  next.setHours(now.getHours() + 1) // next top-of-hour
+  let ms = next.getTime() - now.getTime()
+  if (ms <= 0) {
+    // hit the hour: show flashing state, then reset
+    if (!flashing.value) {
+      flashing.value = true
+      countdown.value = '正在抢购中!'
+      clearTimeout(flashTimer)
+      flashTimer = setTimeout(() => { flashing.value = false }, 1500)
+    }
+    return
+  }
+  const h = Math.floor(ms / 3600000)
+  const m = Math.floor((ms % 3600000) / 60000)
+  const s = Math.floor((ms % 60000) / 1000)
+  countdown.value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
 
 onMounted(async () => {
   loading.value = true
@@ -22,6 +50,12 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  tick()
+  timer = setInterval(tick, 1000)
+})
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+  if (flashTimer) clearTimeout(flashTimer)
 })
 function fmt(n) { return Number(n).toFixed(2) }
 </script>
@@ -44,6 +78,12 @@ function fmt(n) { return Number(n).toFixed(2) }
         <div class="cat-icon">{{ c.icon }}</div>
         <div class="cat-name">{{ c.name }}</div>
       </div>
+    </div>
+
+    <!-- 限时抢购倒计时横幅 (flash sale countdown banner) -->
+    <div class="flash-banner" :class="{ flashing: flashing }" @click="router.push('/seckill')">
+      <span class="fb-text">⚡ 限时秒杀 距开抢还有</span>
+      <span class="fb-countdown" :class="{ flashing: flashing }">{{ countdown }}</span>
     </div>
 
     <!-- 限时秒杀入口 -->
@@ -90,6 +130,12 @@ function fmt(n) { return Number(n).toFixed(2) }
 .logo { color: #ff0036; font-weight: bold; font-size: 18px; }
 .search { flex: 1; padding: 0; }
 .banner { margin: 8px; border-radius: 8px; overflow: hidden; }
+.flash-banner { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 8px; padding: 14px 16px; background: linear-gradient(90deg, #ff0036, #ff2f5a); color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.3s; }
+.flash-banner.flashing { background: linear-gradient(90deg, #ffb300, #ff0036); }
+.fb-text { letter-spacing: 0.5px; }
+.fb-countdown { font-family: 'Courier New', Consolas, monospace; font-size: 20px; letter-spacing: 1px; font-variant-numeric: tabular-nums; padding: 2px 10px; border-radius: 6px; background: rgba(0, 0, 0, 0.22); }
+.fb-countdown.flashing { font-family: inherit; font-size: 16px; background: rgba(255, 255, 255, 0.25); animation: blink 0.5s ease-in-out infinite alternate; }
+@keyframes blink { from { opacity: 1; } to { opacity: 0.6; } }
 .seckill-entry { display: flex; align-items: center; gap: 8px; margin: 8px; background: linear-gradient(90deg, #ff0036, #ff5577); border-radius: 8px; padding: 12px 16px; color: #fff; cursor: pointer; }
 .se-icon { font-size: 20px; }
 .se-title { font-size: 16px; font-weight: bold; }
