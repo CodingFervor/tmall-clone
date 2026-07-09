@@ -9,7 +9,7 @@ const expanded = ref({})
 onMounted(async () => { try { refunds.value = await getRefunds() } catch (e) { if (e.response?.status === 401) router.replace('/login') } finally { loading.value = false } })
 function statusText(s) { return { pending: '审核中', approved: '已通过', rejected: '已拒绝', completed: '已完成' }[s] || s }
 function statusColor(s) { return { pending: 'warning', approved: 'primary', rejected: 'danger', completed: 'success' }[s] || 'default' }
-function typeText(t) { return { refund_only: '仅退款', return_refund: '退货退款' }[t] || '退款' }
+function typeText(t) { return { refund_only: '仅退款', return_refund: '退货退款', exchange: '换货' }[t] || '退款' }
 function fmtTime(t) { if (!t) return ''; return String(t).slice(0, 16).replace('T', ' ') }
 function toggleTimeline(id) { expanded.value[id] = !expanded.value[id] }
 function fmt(n) { return Number(n).toFixed(2) }

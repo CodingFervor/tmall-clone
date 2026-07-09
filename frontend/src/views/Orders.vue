@@ -8,6 +8,15 @@ const router = useRouter()
 const orders = ref([])
 const loading = ref(true)
 
+// After-sale application (售后换货): user first picks a service type, then enters a reason.
+const refundTypeActions = [
+  { name: '仅退款', value: 'refund_only' },
+  { name: '退货退款', value: 'return_refund' },
+  { name: '换货', value: 'exchange' },
+]
+const showRefundSheet = ref(false)
+let refundOrder = null
+
 // Order timeout countdown (订单超时倒计时).
 // Pending orders expire 30 minutes after created_at.
 const ORDER_TIMEOUT_MS = 30 * 60 * 1000
@@ -52,9 +61,17 @@ async function cancel(o) {
 }
 function viewLogistics(o) { router.push({ name: 'logistics', query: { order_id: o.id } }) }
 async function applyRefund(o) {
-  const reason = window.prompt('请输入退款原因')
+  refundOrder = o
+  showRefundSheet.value = true
+}
+async function onSelectRefundType(action) {
+  showRefundSheet.value = false
+  const o = refundOrder
+  refundOrder = null
+  if (!o) return
+  const reason = window.prompt('请输入' + action.name + '原因')
   if (!reason || !reason.trim()) return
-  try { await createRefund(o.id, reason, 'refund_only'); showSuccessToast('退款申请已提交') }
+  try { await createRefund(o.id, reason, action.value); showSuccessToast('申请已提交') }
   catch (e) { showToast(e.response?.data?.error || '申请失败') }
 }
 function statusText(s) { return { pending: '待付款', paid: '已付款', shipped: '已发货', completed: '已完成', cancelled: '已取消' }[s] || s }
@@ -82,11 +99,12 @@ function parseItems(json) { try { return JSON.parse(json) } catch { return [] } 
             <van-button v-if="o.status === 'pending'" size="small" plain round @click="cancel(o)">取消订单</van-button>
             <van-button v-if="['shipped','completed'].includes(o.status)" size="small" type="danger" round @click="confirm(o)">确认收货</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain type="danger" round @click="viewLogistics(o)">查看物流</van-button>
-            <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain @click="applyRefund(o)">申请退款</van-button>
+            <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain @click="applyRefund(o)">申请售后</van-button>
           </div>
         </div>
       </div>
     </div>
+    <van-action-sheet v-model:show="showRefundSheet" :actions="refundTypeActions" cancel-text="取消" close-on-click-action @select="onSelectRefundType" />
   </div>
 </template>
 

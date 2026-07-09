@@ -20,6 +20,14 @@ async function claim(c) {
   catch (e) { showToast(e.response?.data?.error || '领取失败') }
 }
 function couponValue(c) { return c.coupon_type === 'discount' ? (c.value * 10).toFixed(1) + '折' : '¥' + c.value }
+async function shareCoupon(c) {
+  const link = window.location.origin + '/#/coupons?claim=' + c.id
+  try { await navigator.clipboard.writeText(link); showSuccessToast('分享链接已复制') }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = link; document.body.appendChild(ta); ta.select()
+    try { document.execCommand('copy'); showSuccessToast('分享链接已复制') } catch { showToast('复制失败') } finally { document.body.removeChild(ta) }
+  }
+}
 </script>
 <template>
   <div class="coupons-page">
@@ -29,7 +37,7 @@ function couponValue(c) { return c.coupon_type === 'discount' ? (c.value * 10).t
       <div class="section-head">可领取的优惠券</div>
       <div v-for="c in coupons" :key="c.id" class="coupon-card" :class="{ claimed: c.is_claimed }">
         <div class="cc-left"><div class="cc-value">{{ couponValue(c) }}</div><div class="cc-threshold" v-if="c.threshold > 0">满{{ c.threshold }}元可用</div><div class="cc-threshold" v-else>无门槛</div></div>
-        <div class="cc-right"><div class="cc-title">{{ c.title }}</div><div class="cc-date">{{ c.end_date }} 到期</div><van-button v-if="!c.is_claimed" size="small" type="danger" round @click="claim(c)">立即领取</van-button><van-tag v-else type="success">已领取</van-tag></div>
+        <div class="cc-right"><div class="cc-title">{{ c.title }}</div><div class="cc-date">{{ c.end_date }} 到期</div><div class="cc-actions"><van-button v-if="!c.is_claimed" size="small" type="danger" round @click="claim(c)">立即领取</van-button><van-tag v-else type="success">已领取</van-tag><van-button size="small" plain round @click="shareCoupon(c)">分享</van-button></div></div>
       </div>
       <template v-if="loggedIn && myCoupons.length">
         <div class="section-head" style="margin-top: 16px">我的优惠券</div>
@@ -53,4 +61,5 @@ function couponValue(c) { return c.coupon_type === 'discount' ? (c.value * 10).t
 .cc-right { flex: 1; padding: 12px 16px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
 .cc-title { font-size: 14px; font-weight: bold; }
 .cc-date { font-size: 12px; color: #999; }
+.cc-actions { display: flex; align-items: center; gap: 8px; }
 </style>
