@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, onActivated } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showLoadingToast, closeToast } from 'vant'
 import { getOrders, payOrder, createRefund, confirmOrder, cancelOrder, addToCart } from '../api'
@@ -9,6 +9,23 @@ const repurchasing = ref(false)
 const router = useRouter()
 const orders = ref([])
 const loading = ref(true)
+
+// ---- 订单状态筛选 (order status filter tabs) ----
+// 全部|待付款|待发货|待收货|已完成. Counts are computed live from the order
+// list; the active tab drives `filteredOrders`. The 待发货 (paid) and 待收货
+// (shipped) bands map directly to backend statuses.
+const activeStatus = ref('all')
+const statusTabs = computed(() => [
+  { key: 'all', label: '全部', count: orders.value.length },
+  { key: 'pending', label: '待付款', count: orders.value.filter((o) => o.status === 'pending').length },
+  { key: 'paid', label: '待发货', count: orders.value.filter((o) => o.status === 'paid').length },
+  { key: 'shipped', label: '待收货', count: orders.value.filter((o) => o.status === 'shipped').length },
+  { key: 'completed', label: '已完成', count: orders.value.filter((o) => o.status === 'completed').length },
+])
+const filteredOrders = computed(() => {
+  if (activeStatus.value === 'all') return orders.value
+  return orders.value.filter((o) => o.status === activeStatus.value)
+})
 
 // After-sale application (售后换货): user first picks a service type, then enters a reason.
 const refundTypeActions = [
@@ -221,7 +238,18 @@ async function copyToClipboard(text) {
     <div v-if="loading" class="loading"><van-loading /></div>
     <van-empty v-else-if="!orders.length" description="暂无订单" />
     <div v-else>
-      <div v-for="o in orders" :key="o.id" class="order-card">
+      <!-- 订单状态筛选 (order status filter tabs with count badges) -->
+      <div class="status-tabs">
+        <span
+          v-for="t in statusTabs"
+          :key="t.key"
+          class="status-tab"
+          :class="{ active: activeStatus === t.key }"
+          @click="activeStatus = t.key"
+        >{{ t.label }}<span v-if="t.count" class="st-count">{{ t.count }}</span></span>
+      </div>
+      <van-empty v-if="!filteredOrders.length" :description="'暂无' + (statusTabs.find((t) => t.key === activeStatus)?.label || '') + '订单'" />
+      <div v-for="o in filteredOrders" :key="o.id" class="order-card">
         <div class="o-head"><span class="o-no">订单号: {{ o.order_no }}</span><span class="o-status">{{ statusText(o.status) }}</span></div>
         <div v-if="o.status === 'pending'" class="o-countdown" :class="{ 'timed-out': isTimedOut(o) }">{{ countdown(o) }}</div>
         <!-- Multi-package shipment (拆包发货): when an order spans 2+ shops, show per-package groups. -->
@@ -276,6 +304,14 @@ async function copyToClipboard(text) {
 
 <style scoped>
 .orders-page { min-height: 100vh; }
+/* 订单状态筛选 (order status filter tabs) */
+.status-tabs { position: sticky; top: 46px; z-index: 10; display: flex; align-items: center; background: #fff; border-bottom: 1px solid #f0f0f0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.status-tabs::-webkit-scrollbar { display: none; }
+.status-tab { flex-shrink: 0; position: relative; display: inline-flex; align-items: center; gap: 3px; padding: 12px 14px; font-size: 14px; color: #333; white-space: nowrap; cursor: pointer; transition: color 0.15s; }
+.status-tab.active { color: #ff0036; font-weight: bold; }
+.status-tab.active::after { content: ''; position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); width: 22px; height: 3px; border-radius: 2px; background: #ff0036; }
+.st-count { font-size: 11px; color: #fff; background: #ff0036; border-radius: 9px; padding: 0 6px; min-width: 16px; line-height: 16px; text-align: center; }
+.status-tab.active .st-count { background: #ff0036; }
 /* Order export button (订单导出) */
 .export-btn { font-size: 13px; color: #ff0036; font-weight: bold; padding: 4px 8px; }
 .loading { text-align: center; padding: 80px; }

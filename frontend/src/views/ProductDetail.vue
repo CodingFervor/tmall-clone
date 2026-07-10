@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showDialog } from 'vant'
 import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock, getProductQA, askProductQA, markReviewUseful, checkPriceAlert, subscribePriceAlert, unsubscribePriceAlert } from '../api'
@@ -144,6 +144,30 @@ onMounted(async () => {
     showToast('商品不存在')
   } finally {
     loading.value = false
+    // Wire up the scroll-spy observer for the detail tabs now that the DOM exists.
+    nextTick(() => {
+      const sectionEls = ['product', 'reviews', 'qa', 'recommend']
+        .map((k) => tabRefs[k].value)
+        .filter(Boolean)
+      if (!sectionEls.length) return
+      tabObserver = new IntersectionObserver(
+        (entries) => {
+          // Pick the topmost intersecting section as the active tab.
+          const visible = entries
+            .filter((e) => e.isIntersecting)
+            .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+          if (visible.length) {
+            const el = visible[0].target
+            const found = ['product', 'reviews', 'qa', 'recommend'].find((k) => tabRefs[k].value === el)
+            if (found) activeTab.value = found
+          }
+        },
+        // Trigger when a section's top crosses ~120px from the viewport top
+        // (below the fixed nav + sticky tabs).
+        { rootMargin: '-120px 0px -65% 0px', threshold: 0 }
+      )
+      sectionEls.forEach((el) => tabObserver.observe(el))
+    })
   }
 })
 
@@ -360,6 +384,32 @@ const purchaseNotes = [
   '因显示器差异，商品颜色可能与实物略有差异',
   '请确认商品规格（颜色/尺寸/版本）后下单',
 ]
+// ---- 详情Tab导航 (sticky section tabs) ----
+// 商品|评价|问答|推荐. Clicking a tab scrolls to the section; the active tab is
+// tracked both on click and via an IntersectionObserver as the user scrolls.
+const detailTabs = [
+  { key: 'product', label: '商品' },
+  { key: 'reviews', label: '评价' },
+  { key: 'qa', label: '问答' },
+  { key: 'recommend', label: '推荐' },
+]
+const activeTab = ref('product')
+const tabRefs = { product: ref(null), reviews: ref(null), qa: ref(null), recommend: ref(null) }
+const tabsBar = ref(null)
+let tabObserver = null
+function scrollToTab(key) {
+  const el = tabRefs[key] && tabRefs[key].value
+  if (!el) return
+  activeTab.value = key
+  // Offset for the fixed nav-bar + sticky tabs bar so the section heading
+  // isn't hidden underneath.
+  const offset = 96
+  const top = el.getBoundingClientRect().top + window.scrollY - offset
+  window.scrollTo({ top, behavior: 'smooth' })
+}
+onUnmounted(() => {
+  if (tabObserver) { tabObserver.disconnect(); tabObserver = null }
+})
 </script>
 
 <template>
@@ -411,10 +461,20 @@ const purchaseNotes = [
         <span v-if="stockState.fire" class="sm-fire">🔥</span>{{ stockState.label }}
       </span>
     </div>
-    <div class="title-block">
+    <div class="title-block" :ref="(el) => tabRefs.product.value = el">
       <div v-if="product.is_genuine" class="genuine-row"><span class="genuine-tag">正品保障</span> <span class="brand-link" v-if="product.brand_id" @click="router.push('/brand/' + product.brand_id)">{{ product.brand_name }} ›</span></div>
       <h2 class="p-title">{{ product.name }}</h2>
       <p class="p-sub">{{ product.subtitle }}</p>
+    </div>
+    <!-- Sticky detail section tabs (详情Tab导航): 商品|评价|问答|推荐 -->
+    <div class="detail-tabs" ref="tabsBar">
+      <span
+        v-for="t in detailTabs"
+        :key="t.key"
+        class="detail-tab"
+        :class="{ active: activeTab === t.key }"
+        @click="scrollToTab(t.key)"
+      >{{ t.label }}</span>
     </div>
     <van-cell-group inset>
       <van-cell title="店铺" :value="product.shop" is-link v-if="product.brand_id" @click="router.push('/brand/' + product.brand_id)" />
@@ -465,7 +525,7 @@ const purchaseNotes = [
       </div>
     </div>
     <!-- Product Q&A (商品问答) -->
-    <div class="qa-section">
+    <div class="qa-section" :ref="(el) => tabRefs.qa.value = el">
       <div class="qa-head"><span>商品问答 ({{ qaList.length }})</span><van-button size="mini" type="danger" plain @click="showQA = true">提问</van-button></div>
       <div v-if="!qaList.length" class="qa-empty">暂无问答</div>
       <div v-for="qa in qaList.slice(0, 5)" :key="qa.id" class="qa-item">
@@ -514,7 +574,7 @@ const purchaseNotes = [
       </div>
     </div>
     <div v-if="product.description" class="desc"><h3>商品详情</h3><p>{{ product.description }}</p></div>
-    <div class="reviews">
+    <div class="reviews" :ref="(el) => tabRefs.reviews.value = el">
       <div class="rev-head"><span>商品评价 ({{ reviews.length }})</span><van-button size="mini" type="danger" plain @click="showReview = true">写评价</van-button></div>
       <!-- Review summary stats (评价概览统计) -->
       <div v-if="reviews.length" class="rev-summary">
@@ -561,7 +621,7 @@ const purchaseNotes = [
       <van-empty v-else-if="!filteredReviews.length" :description="activeReviewFilter === 'photo' ? '暂无带图评价' : '该筛选下暂无评价'" />
     </div>
     <!-- Related products (看了又看) -->
-    <div v-if="relatedProducts.length" class="related-section">
+    <div v-if="relatedProducts.length" class="related-section" :ref="(el) => tabRefs.recommend.value = el">
       <div class="rs-head">看了又看</div>
       <div class="rs-scroll">
         <div v-for="rp in relatedProducts" :key="rp.id" class="rs-card" @click="goProduct(rp.id)">
@@ -696,6 +756,11 @@ const purchaseNotes = [
 .sm-stock { color: #666; }
 .sm-stock.stock-low { color: #ff9800; }
 .title-block { padding: 0 16px 12px; background: #fff; }
+/* Sticky detail section tabs (详情Tab导航) */
+.detail-tabs { position: sticky; top: 46px; z-index: 10; display: flex; align-items: center; justify-content: space-around; background: #fff; border-bottom: 1px solid #f0f0f0; padding: 10px 0; margin-top: -1px; }
+.detail-tab { position: relative; font-size: 14px; color: #666; padding: 4px 8px; cursor: pointer; transition: color 0.15s; }
+.detail-tab.active { color: #ff0036; font-weight: bold; }
+.detail-tab.active::after { content: ''; position: absolute; left: 50%; bottom: -4px; transform: translateX(-50%); width: 20px; height: 3px; border-radius: 2px; background: #ff0036; }
 .genuine-row { margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
 .brand-link { color: #ff0036; font-size: 12px; }
 .p-title { font-size: 17px; line-height: 24px; }

@@ -108,6 +108,33 @@ const nextTier = computed(() => {
   }
   return null
 })
+// Whether the selected subtotal has reached at least one tier (已达满减).
+// Returns the highest reached tier (with the largest threshold) or null.
+const reachedTier = computed(() => {
+  let best = null
+  for (const t of tiers.value || []) {
+    if (selectedTotal.value >= t.threshold && (!best || t.threshold > best.threshold)) best = t
+  }
+  return best
+})
+// Smart top-up picks (智能凑单): when there's a next tier to chase, surface
+// recommended products whose price roughly covers the remaining gap. Products
+// are ranked by closeness to the gap; small additions (≤ gap*2) that finish the
+// tier are promoted first. Empty when no tier to chase or nothing matches.
+const topupPicks = computed(() => {
+  if (!nextTier.value) return []
+  const gap = nextTier.value.diff
+  return (recommendations.value || [])
+    .filter((p) => p.price > 0)
+    .map((p) => ({ ...p, _delta: p.price - gap }))
+    .filter((p) => p._delta <= gap) // don't suggest items wildly over the gap
+    .sort((a, b) => Math.abs(a._delta) - Math.abs(b._delta))
+    .slice(0, 4)
+})
+async function quickTopup(p) {
+  try { await addToCart(p.id, 1); await load(); showSuccessToast('已加入购物车 凑单成功') }
+  catch (e) { showToast(e.response?.data?.error || '加入失败') }
+}
 // Whether a cart item has dropped in price (降价 tag) — original_price > price * 1.1.
 function isPriceDrop(item) {
   return item.original_price && item.original_price > item.price * 1.1
@@ -295,7 +322,24 @@ function fmt(n) { return Number(n).toFixed(2) }
       <div v-if="tierSummary" class="tier-banner">
         <span class="tier-icon">🎁</span>
         <span class="tier-summary">{{ tierSummary }}</span>
-        <span v-if="nextTier" class="tier-next">再买<b>¥{{ nextTier.diff }}</b>减¥{{ nextTier.discount }}</span>
+        <span v-if="reachedTier" class="tier-met">✓ 已达满减</span>
+        <span v-else-if="nextTier" class="tier-next">再买<b>¥{{ nextTier.diff }}</b>减¥{{ nextTier.discount }}</span>
+      </div>
+      <!-- Smart quantity / 凑单 quick-add (智能数量) -->
+      <div v-if="reachedTier" class="smart-met">
+        <span class="sm-check">✓</span>
+        <span class="sm-text">已达满减 满{{ Math.round(reachedTier.threshold) }}减{{ Math.round(reachedTier.discount) }}</span>
+      </div>
+      <div v-else-if="nextTier && topupPicks.length" class="smart-topup">
+        <div class="st-head">💡 再买 <b>¥{{ nextTier.diff }}</b> 即可凑满减</div>
+        <div class="st-scroll">
+          <div v-for="p in topupPicks" :key="p.id" class="st-card" @click="quickTopup(p)">
+            <van-image width="70" height="70" radius="6" :src="p.image" fit="cover" />
+            <div class="st-name van-ellipsis">{{ p.name }}</div>
+            <div class="st-price">¥{{ fmt(p.price) }}</div>
+            <div class="st-add">+ 凑单</div>
+          </div>
+        </div>
       </div>
       <van-submit-bar :price="finalTotal * 100" :button-text="'结算 (' + selectedCount + '件)'" @submit="checkout">
         <van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox>
@@ -404,6 +448,20 @@ function fmt(n) { return Number(n).toFixed(2) }
 .tier-summary { flex: 1; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tier-next { color: #996600; flex-shrink: 0; }
 .tier-next b { color: #ff0036; }
+.tier-met { color: #07c160; font-weight: bold; flex-shrink: 0; }
+/* Smart quantity (智能凑单) */
+.smart-met { display: flex; align-items: center; gap: 6px; margin: 0 16px 8px; padding: 8px 12px; background: #e6f9ee; border: 1px solid #b6e8c9; border-radius: 8px; }
+.sm-check { color: #07c160; font-size: 16px; font-weight: bold; }
+.sm-text { font-size: 13px; color: #07c160; font-weight: bold; }
+.smart-topup { margin: 0 0 8px; background: linear-gradient(90deg, #fff8e6, #fff0f3); padding: 10px 0 12px; }
+.st-head { font-size: 13px; color: #996600; padding: 0 16px 8px; }
+.st-head b { color: #ff0036; }
+.st-scroll { display: flex; gap: 10px; overflow-x: auto; padding: 0 16px; -webkit-overflow-scrolling: touch; }
+.st-scroll::-webkit-scrollbar { display: none; }
+.st-card { flex: 0 0 auto; width: 78px; text-align: center; }
+.st-name { font-size: 11px; color: #333; margin-top: 4px; }
+.st-price { font-size: 12px; color: #ff0036; font-weight: bold; }
+.st-add { font-size: 11px; color: #fff; background: linear-gradient(135deg, #ff0036, #ff5a5f); border-radius: 10px; padding: 3px 0; margin-top: 4px; }
 .topup-hints { padding: 0 16px 8px; }
 .th-item { background: #fff8e6; color: #996600; font-size: 12px; padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; line-height: 18px; }
 .th-item b { color: #ff0036; }

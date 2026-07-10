@@ -76,6 +76,15 @@ function isNew(p) {
   return (Date.now() - created.getTime()) <= 7 * 24 * 3600 * 1000
 }
 
+// ---- 价格趋势标签 (price trend tags) ----
+// 降价: original price more than 10% above the current price.
+// 秒杀/正品: derived from the product's flag fields (is_seckill / is_genuine).
+function isPriceDrop(p) {
+  return !!(p && p.original_price && p.original_price > p.price * 1.1)
+}
+function isSeckill(p) { return !!(p && p.is_seckill) }
+function isGenuine(p) { return !!(p && p.is_genuine) }
+
 // ---- 分类图标美化 (category icon gradients + ripple) ----
 // Each category icon gets a soft circular gradient backdrop. A pool of
 // festive red/orange/purple tones matching the Tmall brand is cycled.
@@ -221,13 +230,17 @@ function searchTag(tag) {
         <div v-for="p in products" :key="p.id" class="product-card" @click="router.push('/product/' + p.id)">
           <div class="new-badge" v-if="isNew(p)">NEW</div>
           <van-image width="100%" height="170" :src="p.image" fit="cover" radius="6" />
-          <div class="p-tag" v-if="p.is_genuine"><span class="genuine-tag">正品保障</span></div>
           <div class="p-name van-multi-ellipsis--l2">{{ p.name }}</div>
           <div class="p-shop van-ellipsis">{{ p.shop }}</div>
           <div class="p-bottom">
             <span class="price">¥{{ fmt(p.price) }}</span>
-            <span class="sales">{{ p.sales }}人付款</span>
+            <span class="p-tags-inline">
+              <span v-if="isPriceDrop(p)" class="trend-tag trend-down">📉降价</span>
+              <span v-if="isSeckill(p)" class="trend-tag trend-seckill">⚡秒杀</span>
+              <span v-if="isGenuine(p)" class="trend-tag trend-genuine">✓正品</span>
+            </span>
           </div>
+          <div class="p-sales-row"><span class="sales">{{ p.sales }}人付款</span></div>
         </div>
       </div>
     </div>
@@ -283,9 +296,16 @@ function searchTag(tag) {
 .p-tag { padding: 2px 6px; }
 .p-name { font-size: 13px; line-height: 18px; padding: 0 6px; height: 36px; }
 .p-shop { font-size: 11px; color: #999; padding: 0 6px; }
-.p-bottom { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 6px; }
+.p-bottom { display: flex; align-items: center; justify-content: flex-start; gap: 6px; padding: 2px 6px; }
 .p-bottom .price { font-size: 16px; }
+.p-tags-inline { display: inline-flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.p-sales-row { padding: 0 6px 2px; }
 .sales { font-size: 11px; color: #999; }
+/* 价格趋势标签 (price trend tags) */
+.trend-tag { display: inline-flex; align-items: center; font-size: 10px; line-height: 1; font-weight: bold; padding: 3px 5px; border-radius: 3px; white-space: nowrap; }
+.trend-down { color: #07c160; background: #e6f9ee; border: 1px solid #b6e8c9; }
+.trend-seckill { color: #ff0036; background: #fff0f3; border: 1px solid #ffc6cf; }
+.trend-genuine { color: #1677ff; background: #eef5ff; border: 1px solid #bcd6ff; }
 .loading { text-align: center; padding: 20px; }
 
 /* ---- 骨架屏 + 渐入动画 (skeleton shimmer + fade-in) ---- */
