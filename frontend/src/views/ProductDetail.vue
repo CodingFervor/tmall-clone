@@ -60,6 +60,44 @@ const reviewStats = computed(() => {
 function starBarPct(count) {
   return reviews.value.length ? (count / reviews.value.length) * 100 : 0
 }
+// Review filter tabs (评价筛选标签): horizontal pills that filter the review
+// list by rating band or by "has images". Counts are shown in parentheses.
+// `photo` treats a review as having media when its comma-separated images
+// field contains at least one non-empty entry.
+const activeReviewFilter = ref('all')
+const reviewFilters = computed(() => {
+  const rs = reviews.value
+  return [
+    { key: 'all', label: '全部', count: rs.length },
+    { key: 'good', label: '好评 4-5★', count: rs.filter((r) => r.rating >= 4).length },
+    { key: 'mid', label: '中评 3★', count: rs.filter((r) => r.rating === 3).length },
+    { key: 'bad', label: '差评 1-2★', count: rs.filter((r) => r.rating <= 2).length },
+    { key: 'photo', label: '有图', count: rs.filter((r) => r.images && String(r.images).trim()).length },
+  ]
+})
+const filteredReviews = computed(() => {
+  const f = activeReviewFilter.value
+  if (f === 'good') return reviews.value.filter((r) => r.rating >= 4)
+  if (f === 'mid') return reviews.value.filter((r) => r.rating === 3)
+  if (f === 'bad') return reviews.value.filter((r) => r.rating <= 2)
+  if (f === 'photo') return reviews.value.filter((r) => r.images && String(r.images).trim())
+  return reviews.value
+})
+// Stock pressure meter (库存紧张指示): prefers the selected SKU's stock and
+// falls back to the product stock. As stock drops the bar fills more and the
+// color warms from green → orange → red, blinking when nearly sold out.
+const effectiveStock = computed(() => {
+  if (selectedSKU.value && typeof selectedSKU.value.stock === 'number') return selectedSKU.value.stock
+  return product.value ? Number(product.value.stock) || 0 : 0
+})
+const stockState = computed(() => {
+  const s = effectiveStock.value
+  if (s > 100) return { label: '库存充足', pct: 25, color: '#07c160', blink: false, fire: false }
+  if (s >= 20) return { label: '有货', pct: 50, color: '#07c160', blink: false, fire: false }
+  if (s >= 5) return { label: '库存紧张', pct: 80, color: '#ff9800', blink: false, fire: false }
+  if (s >= 1) return { label: `仅剩${s}件`, pct: 95, color: '#ff0036', blink: true, fire: true }
+  return { label: '缺货', pct: 100, color: '#999', blink: false, fire: false }
+})
 async function onUploadReviewImage(item) {
   try { const res = await uploadImage(item.file); reviewImages.value.push(res.url) } catch (e) { showToast('图片上传失败') }
 }
@@ -334,6 +372,15 @@ const brandStoryTags = computed(() => {
         </tbody>
       </table>
     </div>
+    <!-- Stock pressure meter (库存紧张指示): reflects selected SKU stock or product stock -->
+    <div class="stock-meter" :class="{ blink: stockState.blink }">
+      <div class="sm-track">
+        <div class="sm-fill" :style="{ width: stockState.pct + '%', background: stockState.color }"></div>
+      </div>
+      <span class="sm-label" :style="{ color: stockState.color }">
+        <span v-if="stockState.fire" class="sm-fire">🔥</span>{{ stockState.label }}
+      </span>
+    </div>
     <div class="title-block">
       <div v-if="product.is_genuine" class="genuine-row"><span class="genuine-tag">正品保障</span> <span class="brand-link" v-if="product.brand_id" @click="router.push('/brand/' + product.brand_id)">{{ product.brand_name }} ›</span></div>
       <h2 class="p-title">{{ product.name }}</h2>
@@ -442,7 +489,17 @@ const brandStoryTags = computed(() => {
           </div>
         </div>
       </div>
-      <div v-for="r in reviews" :key="r.id" class="rev-item">
+      <!-- Review filter tabs (评价筛选标签) -->
+      <div v-if="reviews.length" class="rev-filters">
+        <span
+          v-for="f in reviewFilters"
+          :key="f.key"
+          class="rev-filter-chip"
+          :class="{ active: activeReviewFilter === f.key }"
+          @click="activeReviewFilter = f.key"
+        >{{ f.label }}({{ f.count }})</span>
+      </div>
+      <div v-for="r in filteredReviews" :key="r.id" class="rev-item">
         <div class="rev-user"><span>{{ r.username }}</span><van-rate v-model="r.rating" readonly size="12" /><span class="rev-reply-btn" @click="toggleReply(r)">回复</span></div>
         <div class="rev-content">{{ r.content }}</div>
         <div v-if="reviewMedia(r).length" class="rev-photos">
@@ -459,6 +516,7 @@ const brandStoryTags = computed(() => {
         </div>
       </div>
       <van-empty v-if="!reviews.length" description="暂无评价" />
+      <van-empty v-else-if="!filteredReviews.length" :description="activeReviewFilter === 'photo' ? '暂无带图评价' : '该筛选下暂无评价'" />
     </div>
     <!-- Related products (看了又看) -->
     <div v-if="relatedProducts.length" class="related-section">
@@ -616,6 +674,20 @@ const brandStoryTags = computed(() => {
 .rs-star-track { flex: 1; height: 7px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
 .rs-star-fill { height: 100%; background: #ff0036; border-radius: 4px; }
 .rs-star-count { font-size: 11px; color: #999; width: 24px; text-align: right; flex-shrink: 0; }
+/* Review filter tabs (评价筛选标签) */
+.rev-filters { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0; border-top: 1px solid #f5f5f5; -webkit-overflow-scrolling: touch; }
+.rev-filters::-webkit-scrollbar { display: none; }
+.rev-filter-chip { flex-shrink: 0; padding: 5px 14px; background: #f7f7f7; border: 1px solid #eee; border-radius: 14px; font-size: 13px; color: #333; white-space: nowrap; cursor: pointer; transition: all 0.15s; }
+.rev-filter-chip.active { background: #ff0036; border-color: #ff0036; color: #fff; }
+/* Stock pressure meter (库存紧张指示) */
+.stock-meter { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #fff; border-top: 1px solid #f5f5f5; }
+.sm-track { flex: 1; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+.sm-fill { height: 100%; border-radius: 4px; transition: width 0.3s, background 0.3s; }
+.sm-label { font-size: 13px; font-weight: bold; white-space: nowrap; flex-shrink: 0; min-width: 70px; text-align: right; }
+.sm-fire { margin-right: 2px; }
+.stock-meter.blink .sm-fill { animation: stock-blink 1s ease-in-out infinite; }
+.stock-meter.blink .sm-label { animation: stock-blink 1s ease-in-out infinite; }
+@keyframes stock-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .rev-item { padding: 10px 0; border-top: 1px solid #f5f5f5; }
 .rev-user { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #666; }
 .rev-content { font-size: 13px; margin-top: 4px; line-height: 18px; }
