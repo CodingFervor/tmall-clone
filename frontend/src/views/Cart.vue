@@ -371,6 +371,7 @@ function fmt(n) { return Number(n).toFixed(2) }
 .cart-page { padding-bottom: 60px; }
 .loading { text-align: center; padding: 80px; }
 .invert-btn { font-size: 14px; color: #ff0036; margin-left: 12px; cursor: pointer; }
+.group-btn { font-size: 13px; color: #fff; background: linear-gradient(135deg, #ff0036, #ff5a5f); padding: 5px 12px; margin-left: 10px; border-radius: 999px; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 6px rgba(255, 0, 54, 0.35); }
 .selected-count { font-size: 12px; color: #969799; margin-left: 12px; }
 .cart-item { display: flex; align-items: center; gap: 10px; padding: 12px; background: #fff; border-bottom: 1px solid #f5f5f5; }
 .ci-info { flex: 1; }
@@ -414,4 +415,16 @@ function fmt(n) { return Number(n).toFixed(2) }
 .rec-name { font-size: 12px; color: #333; line-height: 16px; height: 32px; margin-top: 6px; }
 .rec-bottom { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 4px; }
 .rec-bottom .price { color: #ff0036; font-size: 14px; font-weight: bold; }
+/* Group buy invite popup (好友拼单邀请) */
+.gb-popup { padding: 0 0 18px; overflow: hidden; }
+.gb-hero { background: linear-gradient(135deg, #ff0036 0%, #ff5577 50%, #ffb347 100%); color: #fff; padding: 26px 18px 20px; text-align: center; }
+.gb-title { font-size: 19px; font-weight: bold; letter-spacing: 0.5px; }
+.gb-sub { font-size: 13px; opacity: 0.95; margin-top: 6px; }
+.gb-counter { text-align: center; color: #ff0036; font-size: 14px; margin: 14px 0 4px; }
+.gb-counter b { font-size: 18px; }
+.gb-card { margin: 10px 18px; padding: 12px 14px; background: #fff5f6; border: 1px dashed #ffb3c0; border-radius: 10px; }
+.gb-card-line { font-size: 14px; color: #333; line-height: 24px; }
+.gb-invite-text { margin: 4px 18px 12px; padding: 12px; background: #f7f8fa; border-radius: 8px; font-size: 13px; color: #555; line-height: 20px; white-space: pre-wrap; word-break: break-all; }
+.gb-actions { display: flex; gap: 12px; padding: 0 18px; }
+.gb-demo { text-align: center; font-size: 12px; color: #ff0036; margin-top: 14px; cursor: pointer; }
 </style>
