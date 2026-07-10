@@ -92,6 +92,8 @@ func main() {
 	lotteryRepo := repository.NewLotteryRepo(db.DB)
 	lotteryRepo.SeedPrizes()
 	h.SetLottery(lotteryRepo)
+	// Attach the gift-card (天猫礼品卡) repo.
+	h.SetGiftCard(repository.NewGiftCardRepo(db.DB))
 
 	_ = os.MkdirAll("data/images", 0o755)
 

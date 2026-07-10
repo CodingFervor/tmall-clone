@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/CodingFervor/tmall-clone/backend/internal/model"
@@ -1678,6 +1679,113 @@ func (r *LotteryRepo) SeedPrizes() {
 			`INSERT INTO lottery_prizes (name, points_cost, prize, probability, icon) VALUES (?,?,?,?,?)`,
 			it.Name, it.PointsCost, it.Prize, it.Probability, it.Icon)
 	}
+}
+
+// ===================== Gift cards (礼品卡) =====================
+
+type GiftCardRepo struct{ db *sql.DB }
+
+func NewGiftCardRepo(db *sql.DB) *GiftCardRepo { return &GiftCardRepo{db: db} }
+
+// Generate creates a new gift card with the given face value and returns it.
+// The generated code is a unique uppercase alphanumeric string (prefixed to
+// keep it readable). userID is the owner (0 = unassigned until redeemed).
+func (r *GiftCardRepo) Generate(amount float64, userID int64) (*model.GiftCard, error) {
+	if amount <= 0 {
+		amount = 100
+	}
+	code, err := r.uniqueCode()
+	if err != nil {
+		return nil, err
+	}
+	gc := &model.GiftCard{Code: code, Amount: amount, UserID: userID, Status: "unused"}
+	res, err := r.db.Exec(
+		`INSERT INTO gift_cards (code, amount, user_id, status) VALUES (?,?,?,?)`,
+		gc.Code, gc.Amount, gc.UserID, gc.Status)
+	if err != nil {
+		return nil, err
+	}
+	gc.ID, _ = res.LastInsertId()
+	return gc, nil
+}
+
+// uniqueCode returns a previously-unused gift-card code, retrying on the
+// (extremely unlikely) collision.
+func (r *GiftCardRepo) uniqueCode() (string, error) {
+	const charset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	for i := 0; i < 8; i++ {
+		b := make([]byte, 12)
+		for j := range b {
+			b[j] = charset[rand.Intn(len(charset))]
+		}
+		code := "TM" + string(b)
+		var used int
+		_ = r.db.QueryRow(`SELECT 1 FROM gift_cards WHERE code=? LIMIT 1`, code).Scan(&used)
+		if used == 0 {
+			return code, nil
+		}
+	}
+	return "", fmt.Errorf("生成礼品卡号失败，请重试")
+}
+
+// Redeem applies a gift card to a user. The card must exist, be unused, and
+// not already belong to someone else. It marks the card used and binds it to
+// the redeeming user. Returns the updated card.
+func (r *GiftCardRepo) Redeem(code string, userID int64) (*model.GiftCard, error) {
+	if strings.TrimSpace(code) == "" {
+		return nil, fmt.Errorf("卡号不能为空")
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	gc := &model.GiftCard{}
+	err = tx.QueryRow(
+		`SELECT id, code, amount, user_id, status, created_at FROM gift_cards WHERE code=?`, code,
+	).Scan(&gc.ID, &gc.Code, &gc.Amount, &gc.UserID, &gc.Status, &gc.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("礼品卡不存在")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if gc.Status != "unused" {
+		return nil, fmt.Errorf("礼品卡已使用")
+	}
+	if gc.UserID != 0 && gc.UserID != userID {
+		return nil, fmt.Errorf("该礼品卡不属于当前账号")
+	}
+	if _, err := tx.Exec(
+		`UPDATE gift_cards SET status='used', user_id=? WHERE id=? AND status='unused'`,
+		userID, gc.ID); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	gc.Status = "used"
+	gc.UserID = userID
+	return gc, nil
+}
+
+// ListByUser returns the gift cards owned by (redeemed by) a user.
+func (r *GiftCardRepo) ListByUser(userID int64) ([]model.GiftCard, error) {
+	rows, err := r.db.Query(
+		`SELECT id, code, amount, user_id, status, created_at
+		 FROM gift_cards WHERE user_id=? ORDER BY id DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.GiftCard{}
+	for rows.Next() {
+		var gc model.GiftCard
+		if err := rows.Scan(&gc.ID, &gc.Code, &gc.Amount, &gc.UserID, &gc.Status, &gc.CreatedAt); err == nil {
+			out = append(out, gc)
+		}
+	}
+	return out, nil
 }
 
 // ===================== helpers =====================

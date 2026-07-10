@@ -141,6 +141,7 @@ function logout() { localStorage.removeItem('tm_token'); localStorage.removeItem
       <van-cell title="积分抽奖" is-link @click="router.push('/lottery')" icon="gem-o" />
       <van-cell title="超值拼团" is-link @click="router.push('/group-buy')" icon="friends-o" />
       <van-cell title="超值套餐" is-link @click="router.push('/bundles')" icon="gift-o" />
+      <van-cell title="礼品卡" is-link @click="router.push('/gift-card')" icon="card" />
       <van-cell title="预售专区" is-link @click="router.push('/presale')" icon="underway-o" />
       <van-cell title="售后服务" is-link @click="router.push('/refunds')" icon="after-sale" />
       <van-cell title="优惠券" is-link @click="router.push('/coupons')" icon="coupon-o" />

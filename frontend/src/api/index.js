@@ -154,3 +154,8 @@ export const askProductQA = (id, question) => http.post(`/products/${id}/qa`, { 
 // ---- Order invoices (发票) ----
 export const getInvoice = (orderId) => http.get(`/orders/${orderId}/invoice`).then((r) => r.data.data)
 export const requestInvoice = (orderId, payload) => http.post(`/orders/${orderId}/invoice`, payload).then((r) => r.data)
+
+// ---- Gift cards (天猫礼品卡) ----
+export const generateGiftCard = (amount) => http.post('/gift-cards/generate', { amount }).then((r) => r.data)
+export const redeemGiftCard = (code) => http.post('/gift-cards/redeem', { code }).then((r) => r.data)
+export const getGiftCards = () => http.get('/gift-cards').then((r) => r.data)

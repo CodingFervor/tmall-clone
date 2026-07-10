@@ -138,6 +138,11 @@ func New(h *handler.Handler, allowedOrigins string) *gin.Engine {
 			// Lottery wheel spin (积分大转盘)
 			auth.POST("/lottery/spin", h.SpinLottery)
 
+			// Gift cards (天猫礼品卡)
+			auth.POST("/gift-cards/generate", h.GenerateGiftCard)
+			auth.POST("/gift-cards/redeem", h.RedeemGiftCard)
+			auth.GET("/gift-cards", h.ListGiftCards)
+
 			// Review replies
 			auth.POST("/reviews/reply", h.ReplyReview)
 			auth.POST("/reviews/:id/useful", h.MarkReviewUseful)

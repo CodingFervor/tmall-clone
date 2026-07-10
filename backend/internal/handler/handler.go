@@ -44,6 +44,7 @@ type Handler struct {
 	Invoice      *repository.InvoiceRepo
 	Tiered       *repository.TieredDiscountRepo
 	Lottery      *repository.LotteryRepo
+	GiftCard     *repository.GiftCardRepo
 	jwtKey       []byte
 }
 
@@ -114,6 +115,11 @@ func (h *Handler) SetTiered(td *repository.TieredDiscountRepo) {
 // SetLottery attaches the lottery-wheel (积分大转盘) repo.
 func (h *Handler) SetLottery(l *repository.LotteryRepo) {
 	h.Lottery = l
+}
+
+// SetGiftCard attaches the gift-card (礼品卡) repo.
+func (h *Handler) SetGiftCard(gc *repository.GiftCardRepo) {
+	h.GiftCard = gc
 }
 
 // ---- JWT (HS256, hand-rolled) ----
