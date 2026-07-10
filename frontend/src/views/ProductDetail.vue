@@ -247,6 +247,51 @@ function deliveryEstimate() {
   if (h < 17) return '明日达'
   return '后天达'
 }
+// Eco score (环保评分): deterministic 0-100 score derived from a hash of the
+// product id, with a level label (优秀/良好/合格/一般) and a matching color class.
+function idHash() {
+  if (!product.value) return 0
+  const id = String(product.value.id)
+  let hash = 0
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0
+  }
+  return hash
+}
+const ecoScore = computed(() => idHash() % 101)
+const ecoLevel = computed(() => {
+  const s = ecoScore.value
+  if (s >= 90) return '优秀'
+  if (s >= 70) return '良好'
+  if (s >= 60) return '合格'
+  return '一般'
+})
+const ecoClass = computed(() => {
+  const s = ecoScore.value
+  if (s >= 90) return 'eco-excellent'
+  if (s >= 70) return 'eco-good'
+  if (s >= 60) return 'eco-pass'
+  return 'eco-normal'
+})
+// Brand story (品牌故事): collapsed by default. The narrative is templated from
+// the shop name, and the 品牌理念 tags are 3 unique picks from a fixed pool,
+// selected deterministically via a seeded shuffle of the product id hash.
+const showBrandStory = ref(false)
+const brandStoryText = computed(() => {
+  const shop = (product.value && product.value.shop) || '本品牌'
+  return `${shop}创立多年，始终坚持品质至上，致力于为消费者提供优质的产品与服务。秉承匠心精神，从选材到工艺层层把关，只为打造让用户放心的好物。${shop}，值得信赖的品牌。`
+})
+const brandStoryTags = computed(() => {
+  const pool = ['品质保证', '正品行货', '售后无忧', '极速配送', '用户至上', '匠心工艺']
+  const shuffled = [...pool]
+  let seed = idHash()
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    seed = (seed * 1103515245 + 12345) >>> 0
+    const j = seed % (i + 1)
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled.slice(0, 3)
+})
 </script>
 
 <template>
@@ -298,6 +343,11 @@ function deliveryEstimate() {
       <van-cell title="店铺" :value="product.shop" is-link v-if="product.brand_id" @click="router.push('/brand/' + product.brand_id)" />
       <van-cell title="店铺" :value="product.shop" is-link v-else @click="router.push('/shop/' + encodeURIComponent(product.shop))" />
       <van-cell title="销量" :value="product.sales + '人付款'" />
+      <van-cell title="🌱 环保评分">
+        <template #value>
+          <span class="eco-score" :class="ecoClass">{{ ecoScore }}分 {{ ecoLevel }}</span>
+        </template>
+      </van-cell>
       <van-cell title="标签" :value="product.tags || '正品保障'" />
       <van-cell title="预计送达">
         <template #value>
@@ -360,6 +410,20 @@ function deliveryEstimate() {
         <van-button v-if="priceAlertSubscribed" block plain round @click="cancelPriceAlert(); showPriceAlert = false" style="margin-top:8px">取消提醒</van-button>
       </div>
     </van-popup>
+    <!-- Brand story (品牌故事) -->
+    <div class="brand-story">
+      <div class="bs-head" @click="showBrandStory = !showBrandStory">
+        <span class="bs-title">📖 品牌故事</span>
+        <van-icon :name="showBrandStory ? 'arrow-up' : 'arrow-down'" class="bs-arrow" />
+      </div>
+      <div v-show="showBrandStory" class="bs-body">
+        <p class="bs-text">{{ brandStoryText }}</p>
+        <div class="bs-tags">
+          <span class="bs-tag-label">品牌理念</span>
+          <span v-for="t in brandStoryTags" :key="t" class="bs-tag">{{ t }}</span>
+        </div>
+      </div>
+    </div>
     <div v-if="product.description" class="desc"><h3>商品详情</h3><p>{{ product.description }}</p></div>
     <div class="reviews">
       <div class="rev-head"><span>商品评价 ({{ reviews.length }})</span><van-button size="mini" type="danger" plain @click="showReview = true">写评价</van-button></div>
@@ -597,4 +661,20 @@ function deliveryEstimate() {
 .rs-card { flex-shrink: 0; width: 110px; }
 .rs-name { font-size: 12px; color: #333; line-height: 16px; margin-top: 4px; height: 32px; }
 .rs-price { color: #ff0036; font-size: 14px; font-weight: bold; }
+/* Eco score (环保评分) */
+.eco-score { font-size: 13px; font-weight: bold; }
+.eco-score.eco-excellent { color: #07c160; }
+.eco-score.eco-good { color: #4caf50; }
+.eco-score.eco-pass { color: #ff9800; }
+.eco-score.eco-normal { color: #999; }
+/* Brand story (品牌故事) */
+.brand-story { background: #fff; margin-top: 8px; padding: 12px 16px; }
+.bs-head { display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: bold; }
+.bs-title { display: flex; align-items: center; gap: 4px; }
+.bs-arrow { color: #999; font-size: 14px; }
+.bs-body { padding-top: 10px; border-top: 1px solid #f5f5f5; margin-top: 10px; }
+.bs-text { font-size: 13px; color: #666; line-height: 20px; margin: 0; }
+.bs-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.bs-tag-label { font-size: 13px; font-weight: bold; color: #333; }
+.bs-tag { font-size: 12px; color: #ff0036; background: #fff5f6; border: 1px solid #ffd6df; padding: 3px 10px; border-radius: 12px; }
 </style>
