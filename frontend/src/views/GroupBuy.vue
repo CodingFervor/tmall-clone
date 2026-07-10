@@ -28,6 +28,17 @@ function fmtRemain(ms) {
 function progress(d) {
   return Math.min(100, Math.round((d.joined / d.required) * 100))
 }
+// Dicebear avatars: deterministic per deal so re-renders stay stable, 2-4 members, first is the leader.
+function memberAvatars(d) {
+  const count = Math.min(4, Math.max(2, d.joined || 2))
+  const seedBase = Number(d.id) || 1
+  const avatars = []
+  for (let i = 0; i < count; i++) {
+    const seed = `gb${seedBase}-${i}`
+    avatars.push(`https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(seed)}`)
+  }
+  return avatars
+}
 async function join(d) {
   try {
     const res = await joinGroupBuy(d.id)
@@ -56,6 +67,20 @@ function fmt(n) { return Number(n).toFixed(2) }
             <span class="gc-group">¥{{ fmt(d.group_price) }}</span>
             <span class="gc-origin">¥{{ fmt(d.original_price) }}</span>
           </div>
+          <div class="gc-members">
+            <div class="avatar-stack">
+              <img
+                v-for="(avatar, i) in memberAvatars(d)"
+                :key="i"
+                :src="avatar"
+                class="member-avatar"
+                :class="{ leader: i === 0 }"
+                :style="{ left: (i * 16) + 'px', zIndex: memberAvatars(d).length - i }"
+                alt="拼团成员"
+              />
+            </div>
+            <span class="members-text">{{ d.joined || memberAvatars(d).length }}人已参团</span>
+          </div>
           <div class="gc-progress">
             <div class="gp-bar"><div class="gp-fill" :style="{ width: progress(d) + '%' }"></div></div>
             <span class="gp-text">{{ d.joined }}/{{ d.required }}人</span>
@@ -82,6 +107,12 @@ function fmt(n) { return Number(n).toFixed(2) }
 .gc-price-row { display: flex; align-items: baseline; gap: 8px; margin: 6px 0; }
 .gc-group { color: #ff0036; font-size: 20px; font-weight: bold; }
 .gc-origin { color: #999; font-size: 12px; text-decoration: line-through; }
+/* Member avatar stack: overlapping circular avatars with a gold border on the leader. */
+.gc-members { display: flex; align-items: center; margin-bottom: 6px; }
+.avatar-stack { position: relative; height: 30px; width: calc(30px + 16px * 3); }
+.member-avatar { position: absolute; top: 0; width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; background: #eee; object-fit: cover; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+.member-avatar.leader { border-color: #ffc107; box-shadow: 0 0 0 1px #ffc107, 0 1px 3px rgba(0,0,0,0.15); }
+.members-text { margin-left: 12px; font-size: 12px; color: #666; }
 .gc-progress { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .gp-bar { flex: 1; height: 12px; background: #ffe0e0; border-radius: 6px; overflow: hidden; }
 .gp-fill { height: 100%; background: linear-gradient(90deg, #ff9800, #ff0036); transition: width 0.3s; }

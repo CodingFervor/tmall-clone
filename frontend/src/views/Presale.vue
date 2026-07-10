@@ -24,6 +24,34 @@ function fmtRemain(ms) {
   const m = Math.floor((ms % 3600000) / 60000)
   return `${h}时${m}分`
 }
+// Presale timeline helpers. The deposit phase opens 48h before deposit_end (matches the seed window).
+function depositStart(d) { return new Date(d.deposit_end).getTime() - 48 * 3600000 }
+function balanceEnd(d) { return new Date(d.balance_start).getTime() + 48 * 3600000 }
+// Current stage: deposit -> gap -> balance -> done.
+function stage(d) {
+  const t = now.value
+  const de = new Date(d.deposit_end).getTime()
+  const bs = new Date(d.balance_start).getTime()
+  const be = balanceEnd(d)
+  if (d.status === 'completed' || t >= be) return 'done'
+  if (t < de) return 'deposit'
+  if (t < bs) return 'gap'
+  return 'balance'
+}
+// Dual-phase countdown text.
+function countdownText(d) {
+  const s = stage(d)
+  const t = now.value
+  if (s === 'deposit') return `定金还剩 ${fmtRemain(new Date(d.deposit_end).getTime() - t)}`
+  if (s === 'gap') return `尾款开始 ${fmtRemain(new Date(d.balance_start).getTime() - t)}`
+  if (s === 'balance') return `尾款截止 ${fmtRemain(balanceEnd(d) - t)}`
+  return '已结束'
+}
+// Deposit doubling bonus is only available within the first 24h of the deposit phase.
+function depositDoubleActive(d) {
+  const t = now.value
+  return t >= depositStart(d) && t < depositStart(d) + 24 * 3600000 && stage(d) === 'deposit'
+}
 function savePct(d) {
   if (!d.original_price || d.original_price <= d.final_price) return 0
   return Math.round((1 - d.final_price / d.original_price) * 100)
@@ -57,9 +85,19 @@ function fmt(n) { return Number(n).toFixed(2) }
             <van-tag type="danger" round v-if="savePct(d) > 0">省{{ savePct(d) }}%</van-tag>
           </div>
           <div class="pc-deposit">定金 ¥{{ fmt(d.deposit) }} · 尾款 ¥{{ fmt(d.balance) }}</div>
+          <div class="pc-stages">
+            <span class="pc-stage" :class="{ active: stage(d) === 'deposit', done: ['gap','balance','done'].includes(stage(d)) }">定金期</span>
+            <span class="pc-stage-sep">→</span>
+            <span class="pc-stage" :class="{ active: stage(d) === 'gap', done: ['balance','done'].includes(stage(d)) }">间隔期</span>
+            <span class="pc-stage-sep">→</span>
+            <span class="pc-stage" :class="{ active: stage(d) === 'balance', done: stage(d) === 'done' }">尾款期</span>
+            <span class="pc-stage-sep">→</span>
+            <span class="pc-stage" :class="{ active: stage(d) === 'done' }">已完成</span>
+          </div>
           <div class="pc-bottom">
-            <span class="pc-countdown">⏰ 定金截止 {{ fmtRemain(remainMs(d)) }}</span>
-            <van-button size="small" type="danger" round @click="payDeposit(d)">付定金</van-button>
+            <span class="pc-countdown">⏰ {{ countdownText(d) }}</span>
+            <van-tag type="warning" round class="pc-double" v-if="depositDoubleActive(d)">定金翻倍</van-tag>
+            <van-button size="small" type="danger" round @click="payDeposit(d)" :disabled="stage(d) !== 'deposit'">付定金</van-button>
           </div>
         </div>
       </div>
@@ -78,6 +116,13 @@ function fmt(n) { return Number(n).toFixed(2) }
 .pc-final { color: #ff0036; font-size: 20px; font-weight: bold; }
 .pc-origin { color: #999; font-size: 12px; text-decoration: line-through; }
 .pc-deposit { font-size: 12px; color: #666; margin-bottom: 6px; }
-.pc-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
-.pc-countdown { color: #ff0036; font-size: 12px; }
+/* Stage indicator: 定金期 → 间隔期 → 尾款期 → 已完成, current stage highlighted. */
+.pc-stages { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; margin-bottom: 8px; }
+.pc-stage { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #f0f0f0; color: #999; border: 1px solid transparent; }
+.pc-stage.done { background: #fff0f3; color: #ff0036; }
+.pc-stage.active { background: #ff0036; color: #fff; border-color: #ff0036; box-shadow: 0 0 0 2px rgba(255,0,54,0.15); font-weight: bold; }
+.pc-stage-sep { font-size: 11px; color: #ccc; }
+.pc-bottom { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: auto; }
+.pc-countdown { color: #ff0036; font-size: 12px; font-weight: bold; flex: 1; }
+.pc-double { flex-shrink: 0; }
 </style>

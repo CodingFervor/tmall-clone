@@ -29,6 +29,11 @@ function progress(d) {
   if (d.stock <= 0) return 100
   return Math.min(100, Math.round((d.sold / d.stock) * 100))
 }
+// Stock below 20% remaining triggers the urgent shake effect.
+function lowStock(d) {
+  if (!d.stock || d.stock <= 0) return progress(d) >= 80
+  return (d.stock - d.sold) / d.stock < 0.2
+}
 async function grab(d) {
   try {
     const res = await grabSeckill(d.id)
@@ -43,6 +48,7 @@ function fmt(n) { return Number(n).toFixed(2) }
 
 <template>
   <div class="seckill-page">
+    <div class="flash-overlay"></div>
     <van-nav-bar title="天猫秒杀" left-arrow @click-left="router.back()" fixed placeholder />
     <div v-if="loading" class="loading"><van-loading /></div>
     <van-empty v-else-if="!deals.length" description="暂无秒杀活动" />
@@ -57,12 +63,12 @@ function fmt(n) { return Number(n).toFixed(2) }
             <span class="dc-origin">¥{{ fmt(d.original_price) }}</span>
           </div>
           <div class="dc-progress">
-            <div class="dp-bar"><div class="dp-fill" :style="{ width: progress(d) + '%' }"></div></div>
+            <div class="dp-bar" :class="{ shake: lowStock(d) && progress(d) < 100 }"><div class="dp-fill" :style="{ width: progress(d) + '%' }"></div></div>
             <span class="dp-text">已抢{{ progress(d) }}%</span>
           </div>
           <div class="dc-bottom">
             <span class="dc-countdown">⏰ {{ fmtRemain(remainMs(d)) }}</span>
-            <van-button size="small" type="danger" round :disabled="progress(d) >= 100" @click="grab(d)">
+            <van-button size="small" type="danger" round class="grab-btn" :disabled="progress(d) >= 100" @click="grab(d)">
               {{ progress(d) >= 100 ? '已抢光' : '马上抢' }}
             </van-button>
           </div>
@@ -73,8 +79,16 @@ function fmt(n) { return Number(n).toFixed(2) }
 </template>
 
 <style scoped>
-.seckill-page { min-height: 100vh; }
+.seckill-page { min-height: 100vh; position: relative; }
 .loading { text-align: center; padding: 80px; }
+/* Periodic white flash overlay: a 5s infinite loop fires the flash once per cycle (pure CSS). */
+.flash-overlay { position: fixed; inset: 0; background: #fff; pointer-events: none; z-index: 9999; opacity: 0; animation: seckill-flash 5s ease-out infinite; }
+@keyframes seckill-flash {
+  0% { opacity: 0; }
+  2% { opacity: 0.85; }
+  10% { opacity: 0; }
+  100% { opacity: 0; }
+}
 .banner { background: linear-gradient(135deg, #ff0036, #ff5577); color: #fff; text-align: center; padding: 14px; font-size: 16px; font-weight: bold; }
 .deal-card { display: flex; gap: 12px; background: #fff; margin: 8px; border-radius: 10px; padding: 12px; }
 .dc-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -86,6 +100,22 @@ function fmt(n) { return Number(n).toFixed(2) }
 .dp-bar { flex: 1; height: 12px; background: #ffe0e0; border-radius: 6px; overflow: hidden; }
 .dp-fill { height: 100%; background: linear-gradient(90deg, #ff9800, #ff0036); transition: width 0.3s; }
 .dp-text { font-size: 11px; color: #ff0036; white-space: nowrap; }
+/* Urgent shake on the progress bar when stock < 20% remaining (pure CSS). */
+.dp-bar.shake { animation: seckill-shake 0.4s linear infinite; }
+@keyframes seckill-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
 .dc-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
 .dc-countdown { color: #ff0036; font-size: 14px; font-weight: bold; font-variant-numeric: tabular-nums; }
+/* Pulsing glow on the "马上抢" button (pure CSS). */
+.grab-btn { animation: seckill-pulse 1.2s ease-in-out infinite; }
+@keyframes seckill-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,0,54,0.7), 0 0 6px 1px rgba(255,0,54,0.6); transform: scale(1); }
+  50% { box-shadow: 0 0 0 8px rgba(255,0,54,0), 0 0 14px 3px rgba(255,0,54,0.9); transform: scale(1.06); }
+}
+.grab-btn:disabled { animation: none; }
 </style>
