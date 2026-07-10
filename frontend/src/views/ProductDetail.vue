@@ -330,6 +330,36 @@ const brandStoryTags = computed(() => {
   }
   return shuffled.slice(0, 3)
 })
+// Product origin map (产地溯源): city is picked deterministically from the
+// product id via `id % 10` over a fixed 10-city pool. Each city is paired with
+// its province for the "省份·城市" display format; municipalities use the city
+// name as their own province label.
+const originCityPool = ['北京', '上海', '广州', '深圳', '杭州', '成都', '武汉', '西安', '南京', '重庆']
+const originCityProvince = {
+  '北京': '北京', '上海': '上海', '广州': '广东', '深圳': '广东', '杭州': '浙江',
+  '成都': '四川', '武汉': '湖北', '西安': '陕西', '南京': '江苏', '重庆': '重庆',
+}
+const originCity = computed(() => {
+  if (!product.value) return ''
+  const idx = Number(product.value.id) % 10
+  return originCityPool[idx] || originCityPool[0]
+})
+const originText = computed(() => {
+  const city = originCity.value
+  const prov = originCityProvince[city] || city
+  return `${prov}·${city}`
+})
+const showOriginMap = ref(false)
+function openOriginMap() { showOriginMap.value = true }
+
+// Purchase note templates (购买须知): a fixed set of 3 notes shown under a
+// collapsible header. Collapsed by default to mirror the brand story pattern.
+const showPurchaseNote = ref(false)
+const purchaseNotes = [
+  '7天无理由退货，请保持商品完好',
+  '因显示器差异，商品颜色可能与实物略有差异',
+  '请确认商品规格（颜色/尺寸/版本）后下单',
+]
 </script>
 
 <template>
@@ -401,6 +431,8 @@ const brandStoryTags = computed(() => {
           <span class="delivery-est"><span class="delivery-icon">🚚</span> {{ deliveryEstimate() }}</span>
         </template>
       </van-cell>
+      <!-- Product origin map (产地溯源): city chosen by product id % 10 -->
+      <van-cell title="📍 产地溯源" is-link :value="originText" @click="openOriginMap" />
       <van-cell :title="restockSubscribed ? '到货通知已开启' : '到货通知'" @click="toggleRestock">
         <template #right-icon><van-switch :model-value="restockSubscribed" size="20" @click.stop="toggleRestock" active-color="#ff0036" /></template>
       </van-cell>
@@ -469,6 +501,16 @@ const brandStoryTags = computed(() => {
           <span class="bs-tag-label">品牌理念</span>
           <span v-for="t in brandStoryTags" :key="t" class="bs-tag">{{ t }}</span>
         </div>
+      </div>
+    </div>
+    <!-- Purchase note templates (购买须知): collapsible, 3 fixed notes -->
+    <div class="purchase-note">
+      <div class="pn-head" @click="showPurchaseNote = !showPurchaseNote">
+        <span class="pn-title">📋 购买须知</span>
+        <van-icon :name="showPurchaseNote ? 'arrow-up' : 'arrow-down'" class="pn-arrow" />
+      </div>
+      <div v-show="showPurchaseNote" class="pn-body">
+        <div v-for="(n, i) in purchaseNotes" :key="i" class="pn-item"><span class="pn-check">✓</span><span class="pn-text">{{ n }}</span></div>
       </div>
     </div>
     <div v-if="product.description" class="desc"><h3>商品详情</h3><p>{{ product.description }}</p></div>
@@ -586,6 +628,29 @@ const brandStoryTags = computed(() => {
           </div>
         </div>
         <van-button type="danger" block @click="submitReview" style="margin-top:12px">提交评价</van-button>
+      </div>
+    </van-popup>
+    <!-- Origin map popup (产地溯源): visual route 📍 origin → 🏠 you -->
+    <van-popup v-model:show="showOriginMap" round closeable position="bottom" :style="{ width: '90%' }">
+      <div class="origin-map">
+        <div class="om-head">📍 产地溯源</div>
+        <div class="om-route">
+          <div class="om-point om-origin">
+            <div class="om-icon">📍</div>
+            <div class="om-label">产地</div>
+            <div class="om-city">{{ originText }}</div>
+          </div>
+          <div class="om-line">
+            <div class="om-dash"></div>
+            <div class="om-truck">🚚</div>
+          </div>
+          <div class="om-point om-home">
+            <div class="om-icon">🏠</div>
+            <div class="om-label">您</div>
+            <div class="om-city">送货上门</div>
+          </div>
+        </div>
+        <div class="om-tip">商品由 {{ originText }} 发货，正品保障，全程可溯源</div>
       </div>
     </van-popup>
   </div>
@@ -749,4 +814,26 @@ const brandStoryTags = computed(() => {
 .bs-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
 .bs-tag-label { font-size: 13px; font-weight: bold; color: #333; }
 .bs-tag { font-size: 12px; color: #ff0036; background: #fff5f6; border: 1px solid #ffd6df; padding: 3px 10px; border-radius: 12px; }
+/* Purchase note templates (购买须知) */
+.purchase-note { background: #fff; margin-top: 8px; padding: 12px 16px; }
+.pn-head { display: flex; justify-content: space-between; align-items: center; font-size: 15px; font-weight: bold; }
+.pn-title { display: flex; align-items: center; gap: 4px; }
+.pn-arrow { color: #999; font-size: 14px; }
+.pn-body { padding-top: 10px; border-top: 1px solid #f5f5f5; margin-top: 10px; }
+.pn-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; }
+.pn-check { color: #07c160; font-weight: bold; font-size: 14px; flex-shrink: 0; line-height: 20px; }
+.pn-text { font-size: 13px; color: #666; line-height: 20px; flex: 1; }
+/* Origin map popup (产地溯源) */
+.origin-map { padding: 20px; }
+.om-head { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 20px; }
+.om-route { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px 20px; }
+.om-point { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
+.om-icon { font-size: 36px; }
+.om-label { font-size: 12px; color: #999; }
+.om-city { font-size: 13px; color: #ff0036; font-weight: bold; }
+.om-origin .om-city { color: #ff9800; }
+.om-line { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; padding: 0 8px; }
+.om-dash { width: 100%; height: 0; border-top: 3px dashed #ff0036; }
+.om-truck { position: absolute; font-size: 24px; background: #fff; padding: 0 6px; }
+.om-tip { text-align: center; font-size: 13px; color: #666; padding: 12px; background: #fff5f6; border: 1px solid #ffd6df; border-radius: 8px; line-height: 20px; }
 </style>

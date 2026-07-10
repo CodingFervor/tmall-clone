@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
-import { getCart, updateCart, deleteCart, createOrder, getMyCoupons, getAddresses, requestInvoice, getTieredDiscounts, getProducts, addToCart } from '../api'
+import { getCart, updateCart, deleteCart, createOrder, getMyCoupons, getAddresses, requestInvoice, getTieredDiscounts, getProducts, addToCart, toggleFavorite } from '../api'
 
 const router = useRouter()
 const items = ref([])
@@ -148,6 +148,13 @@ async function changeQty(item, qty) {
   try { await updateCart(item.id, qty, item.selected); item.quantity = qty; await load() } catch (e) {}
 }
 async function removeItem(item) { try { await deleteCart(item.id); await load(); showSuccessToast('已删除') } catch (e) {} }
+// 收藏 (favorite) — called from the swipe action of a cart item.
+async function favoriteItem(item) {
+  try {
+    await toggleFavorite(item.product_id)
+    showSuccessToast('已收藏')
+  } catch (e) { showToast(e.response?.data?.error || '操作失败') }
+}
 async function quickAdd(p) { try { await addToCart(p.id, 1); await load(); showSuccessToast('已加入购物车') } catch (e) { showToast(e.response?.data?.error || '加入失败') } }
 async function toggleAll() {
   const t = allSelected.value ? 0 : 1
@@ -238,14 +245,22 @@ function fmt(n) { return Number(n).toFixed(2) }
     <div v-if="loading" class="loading"><van-loading /></div>
     <van-empty v-else-if="!items.length" description="购物车是空的"><van-button type="danger" round @click="router.push('/home')">去逛逛</van-button></van-empty>
     <div v-else>
-      <div v-for="it in items" :key="it.id" class="cart-item">
-        <van-checkbox :model-value="it.selected === 1" @click="toggleSelect(it)" />
-        <van-image width="80" height="80" radius="6" :src="it.product_image" fit="cover" @click="router.push('/product/' + it.product_id)" />
-        <div class="ci-info">
-          <div class="ci-name van-multi-ellipsis--l2">{{ it.product_name }}</div>
-          <div class="ci-bottom"><span class="price">¥{{ fmt(it.price) }}</span><van-tag v-if="isPriceDrop(it)" type="danger" size="medium" round>降价</van-tag><van-stepper v-model="it.quantity" :min="1" :max="it.stock" @change="(v) => changeQty(it, v)" /><van-icon name="delete-o" size="20" @click="removeItem(it)" /></div>
+      <van-swipe-cell v-for="it in items" :key="it.id">
+        <div class="cart-item">
+          <van-checkbox :model-value="it.selected === 1" @click="toggleSelect(it)" />
+          <van-image width="80" height="80" radius="6" :src="it.product_image" fit="cover" @click="router.push('/product/' + it.product_id)" />
+          <div class="ci-info">
+            <div class="ci-name van-multi-ellipsis--l2">{{ it.product_name }}</div>
+            <div class="ci-bottom"><span class="price">¥{{ fmt(it.price) }}</span><van-tag v-if="isPriceDrop(it)" type="danger" size="medium" round>降价</van-tag><van-stepper v-model="it.quantity" :min="1" :max="it.stock" @change="(v) => changeQty(it, v)" /><van-icon name="delete-o" size="20" @click="removeItem(it)" /></div>
+          </div>
         </div>
-      </div>
+        <template #right>
+          <div class="swipe-actions">
+            <div class="swipe-btn swipe-fav" @click="favoriteItem(it)">收藏</div>
+            <div class="swipe-btn swipe-del" @click="removeItem(it)">删除</div>
+          </div>
+        </template>
+      </van-swipe-cell>
       <!-- Coupon selector -->
       <van-cell
         title="优惠券"
@@ -374,6 +389,11 @@ function fmt(n) { return Number(n).toFixed(2) }
 .group-btn { font-size: 13px; color: #fff; background: linear-gradient(135deg, #ff0036, #ff5a5f); padding: 5px 12px; margin-left: 10px; border-radius: 999px; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 6px rgba(255, 0, 54, 0.35); }
 .selected-count { font-size: 12px; color: #969799; margin-left: 12px; }
 .cart-item { display: flex; align-items: center; gap: 10px; padding: 12px; background: #fff; border-bottom: 1px solid #f5f5f5; }
+/* 购物车滑动操作 (swipe actions) */
+.swipe-actions { display: flex; height: 100%; }
+.swipe-btn { display: flex; align-items: center; justify-content: center; width: 60px; color: #fff; font-size: 14px; cursor: pointer; }
+.swipe-fav { background: #ff976a; }
+.swipe-del { background: #ee0a24; }
 .ci-info { flex: 1; }
 .ci-name { font-size: 13px; line-height: 18px; height: 36px; }
 .ci-bottom { display: flex; align-items: center; gap: 8px; margin-top: 6px; }

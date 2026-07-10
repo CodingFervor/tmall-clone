@@ -2,13 +2,53 @@
 import { ref, computed, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { getProfile, getCheckInStatus } from '../api'
+import { getProfile, getCheckInStatus, getOrders, listFavorites, getMyCoupons } from '../api'
 
 const router = useRouter()
 const user = ref(null)
 const cartCount = ref(0)
 const loggedIn = ref(false)
 const growth = ref(0) // 成长值 (derived from accumulated points)
+
+// ---- 深色模式 (dark mode) ----
+// Persisted in localStorage under 'tm_dark_mode'. The class is applied to the
+// root <html> element so dark overrides cascade across the whole app.
+const DARK_KEY = 'tm_dark_mode'
+const darkMode = ref(false)
+function applyDarkClass(on) {
+  const root = document.documentElement
+  if (on) root.classList.add('dark-mode')
+  else root.classList.remove('dark-mode')
+}
+function toggleDark() {
+  darkMode.value = !darkMode.value
+  localStorage.setItem(DARK_KEY, String(darkMode.value))
+  applyDarkClass(darkMode.value)
+  showToast(darkMode.value ? '已切换深色模式' : '已切换浅色模式')
+}
+// Initialize from storage on mount (so the toggle UI reflects saved state).
+darkMode.value = localStorage.getItem(DARK_KEY) === 'true'
+applyDarkClass(darkMode.value)
+
+// ---- 个人速览 (quick stats) ----
+// 订单数 / 收藏数 / 优惠券数 / 积分数 — fetched from existing APIs.
+const stats = ref({ orders: 0, favorites: 0, coupons: 0, points: 0 })
+async function loadStats() {
+  if (!loggedIn.value) { stats.value = { orders: 0, favorites: 0, coupons: 0, points: 0 }; return }
+  try {
+    const [orders, favs, coupons] = await Promise.all([
+      getOrders().catch(() => []),
+      listFavorites().catch(() => []),
+      getMyCoupons().catch(() => []),
+    ])
+    stats.value = {
+      orders: (orders || []).length,
+      favorites: (favs || []).length,
+      coupons: (coupons || []).length,
+      points: growth.value,
+    }
+  } catch (_) { /* stats optional */ }
+}
 
 // ---- 会员等级体系 (member growth levels) ----
 // thresholds: cumulative growth points required to reach each level
@@ -53,6 +93,7 @@ async function load() {
       const st = await getCheckInStatus()
       growth.value = st.total_points || 0
     } catch (_) { /* points optional */ }
+    await loadStats()
   } catch (e) { loggedIn.value = false }
 }
 onMounted(load); onActivated(load)
@@ -62,13 +103,39 @@ function logout() { localStorage.removeItem('tm_token'); localStorage.removeItem
 <template>
   <div class="mine-page">
     <div class="mine-header">
-      <div v-if="loggedIn && user" class="user-info">
-        <van-image round width="60" height="60" :src="user.avatar || 'https://via.placeholder.com/60'" />
-        <div class="u-text"><div class="u-name">{{ user.nickname || user.username }}</div><div class="u-id">用户名: {{ user.username }}</div></div>
+      <div class="header-row">
+        <div v-if="loggedIn && user" class="user-info">
+          <van-image round width="60" height="60" :src="user.avatar || 'https://via.placeholder.com/60'" />
+          <div class="u-text"><div class="u-name">{{ user.nickname || user.username }}</div><div class="u-id">用户名: {{ user.username }}</div></div>
+        </div>
+        <div v-else class="user-info" @click="router.push('/login')">
+          <van-image round width="60" height="60" src="https://via.placeholder.com/60" />
+          <div class="u-text"><div class="u-name">登录/注册</div><div class="u-id">理想生活上天猫</div></div>
+        </div>
+        <!-- 深色模式开关 (dark mode toggle) -->
+        <div class="dark-toggle" @click="toggleDark">
+          <span class="dt-icon">{{ darkMode ? '🌙' : '☀️' }}</span>
+          <span class="dt-label">{{ darkMode ? '深色' : '浅色' }}</span>
+        </div>
       </div>
-      <div v-else class="user-info" @click="router.push('/login')">
-        <van-image round width="60" height="60" src="https://via.placeholder.com/60" />
-        <div class="u-text"><div class="u-name">登录/注册</div><div class="u-id">理想生活上天猫</div></div>
+    </div>
+    <!-- 个人速览 (quick stats) — 订单数/收藏数/优惠券数/积分数 -->
+    <div class="stats-row">
+      <div class="stat-item" @click="router.push('/orders')">
+        <div class="stat-num">{{ stats.orders }}</div>
+        <div class="stat-label">订单数</div>
+      </div>
+      <div class="stat-item" @click="router.push('/favorites')">
+        <div class="stat-num">{{ stats.favorites }}</div>
+        <div class="stat-label">收藏数</div>
+      </div>
+      <div class="stat-item" @click="router.push('/coupons')">
+        <div class="stat-num">{{ stats.coupons }}</div>
+        <div class="stat-label">优惠券数</div>
+      </div>
+      <div class="stat-item" @click="router.push('/points-shop')">
+        <div class="stat-num">{{ stats.points }}</div>
+        <div class="stat-label">积分数</div>
       </div>
     </div>
     <div class="growth-section">
@@ -158,9 +225,18 @@ function logout() { localStorage.removeItem('tm_token'); localStorage.removeItem
 <style scoped>
 .mine-page { min-height: 100vh; padding-bottom: 20px; }
 .mine-header { background: linear-gradient(135deg, #ff0036, #ff5577); padding: 30px 20px; color: #fff; }
+.header-row { display: flex; align-items: center; justify-content: space-between; }
 .user-info { display: flex; align-items: center; gap: 14px; }
 .u-name { font-size: 18px; font-weight: bold; }
 .u-id { font-size: 12px; opacity: 0.8; margin-top: 4px; }
+/* 深色模式开关 (dark mode toggle) */
+.dark-toggle { display: flex; align-items: center; gap: 4px; padding: 6px 12px; background: rgba(255,255,255,0.2); border-radius: 999px; cursor: pointer; font-size: 13px; }
+.dt-icon { font-size: 16px; }
+/* 个人速览 (quick stats) */
+.stats-row { display: flex; background: #fff; margin: -12px 12px 12px; border-radius: 12px; padding: 16px 0; box-shadow: 0 2px 12px rgba(0,0,0,0.06); position: relative; z-index: 2; }
+.stat-item { flex: 1; text-align: center; cursor: pointer; }
+.stat-num { font-size: 20px; font-weight: bold; color: #ff0036; }
+.stat-label { font-size: 12px; color: #666; margin-top: 4px; }
 .order-entries { display: flex; padding: 16px 0; }
 .oe-item { flex: 1; text-align: center; font-size: 12px; color: #666; }
 .oe-item span { display: block; margin-top: 4px; }

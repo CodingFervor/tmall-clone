@@ -148,11 +148,76 @@ function packagesOf(o) {
   }
   return order.map(k => ({ shop: k, items: map[k] }))
 }
+// Order export (订单导出): build a plain-text summary of all orders and copy
+// it to the clipboard. Each order lists its number, status, total, created time
+// and itemized lines. Uses navigator.clipboard with a textarea fallback so it
+// works in non-secure contexts too.
+function exportOrders() {
+  if (!orders.value.length) { showToast('暂无订单可导出'); return }
+  const lines = []
+  lines.push('=========== 订单导出 ===========')
+  lines.push('导出时间：' + new Date().toLocaleString('zh-CN'))
+  lines.push('订单总数：' + orders.value.length + ' 笔')
+  lines.push('================================')
+  orders.value.forEach((o, i) => {
+    lines.push('')
+    lines.push(`【订单 ${i + 1}】`)
+    lines.push(`订单号：${o.order_no || o.id}`)
+    lines.push(`状态：${statusText(o.status)}`)
+    lines.push(`合计：¥${fmt(o.total)}`)
+    if (o.created_at) lines.push(`下单时间：${fmtFullTime(o.created_at)}`)
+    const items = parseItems(o.items_json)
+    if (items.length) {
+      lines.push('商品明细：')
+      items.forEach((it, j) => {
+        const qty = Number(it.quantity) > 0 ? Number(it.quantity) : 1
+        const price = Number(it.price) || 0
+        lines.push(`  ${j + 1}. ${it.name || '-'}  ¥${price.toFixed(2)} × ${qty} = ¥${(price * qty).toFixed(2)}`)
+      })
+    }
+    lines.push('--------------------------------')
+  })
+  const text = lines.join('\n')
+  copyToClipboard(text)
+}
+function fmtFullTime(t) {
+  if (!t) return ''
+  const d = new Date(t)
+  if (isNaN(d.getTime())) return ''
+  const y = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mi = String(d.getMinutes()).padStart(2, '0')
+  return `${y}-${mm}-${dd} ${hh}:${mi}`
+}
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    showSuccessToast('订单已导出到剪贴板')
+  } catch (e) {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    let ok = false
+    try { ok = document.execCommand('copy') } catch { ok = false }
+    document.body.removeChild(ta)
+    if (ok) showSuccessToast('订单已导出到剪贴板')
+    else showToast('复制失败，请重试')
+  }
+}
 </script>
 
 <template>
   <div class="orders-page">
-    <van-nav-bar title="我的订单" left-arrow @click-left="router.back()" fixed placeholder />
+    <van-nav-bar title="我的订单" left-arrow @click-left="router.back()" fixed placeholder>
+      <template #right>
+        <span class="export-btn" @click="exportOrders">📋 导出</span>
+      </template>
+    </van-nav-bar>
     <div v-if="loading" class="loading"><van-loading /></div>
     <van-empty v-else-if="!orders.length" description="暂无订单" />
     <div v-else>
@@ -211,6 +276,8 @@ function packagesOf(o) {
 
 <style scoped>
 .orders-page { min-height: 100vh; }
+/* Order export button (订单导出) */
+.export-btn { font-size: 13px; color: #ff0036; font-weight: bold; padding: 4px 8px; }
 .loading { text-align: center; padding: 80px; }
 .order-card { background: #fff; margin: 8px; border-radius: 8px; padding: 12px; }
 .o-head { display: flex; justify-content: space-between; font-size: 12px; color: #999; margin-bottom: 8px; }
