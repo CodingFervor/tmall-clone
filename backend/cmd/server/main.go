@@ -79,6 +79,8 @@ func main() {
 	bundleRepo := repository.NewBundleRepo(db.DB)
 	bundleRepo.SeedBundles()
 	h.SetBundle(bundleRepo, repository.NewRestockRepo(db.DB))
+	// Attach the price-drop-alert (降价提醒) repo.
+	h.SetPriceAlert(repository.NewPriceAlertRepo(db.DB))
 	// Attach the Q&A repo + seed VIP prices.
 	h.SetQA(repository.NewQARepo(db.DB))
 	repository.SeedVIPPrices(db.DB)

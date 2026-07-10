@@ -636,6 +636,76 @@ func (h *Handler) CheckRestock(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"subscribed": h.Restock.IsSubscribed(uid, pid)})
 }
 
+// ===================== Price alerts (降价提醒) =====================
+
+// SubscribePriceAlert creates or updates a price-drop alert for a product.
+// The request body carries the target price; if omitted it defaults to 90% of
+// the product's current price.
+func (h *Handler) SubscribePriceAlert(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	pid, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的商品ID"})
+		return
+	}
+	var req model.PriceAlertInput
+	_ = c.ShouldBindJSON(&req)
+	target := req.TargetPrice
+	if target <= 0 {
+		// Default to 90% of the current price when none is supplied.
+		p, err := h.Product.Get(pid)
+		if err != nil || p == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "商品不存在"})
+			return
+		}
+		target = p.Price * 0.9
+	}
+	if err := h.PriceAlert.Subscribe(uid, pid, target); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "订阅失败"})
+		return
+	}
+	a, _ := h.PriceAlert.Get(uid, pid)
+	c.JSON(http.StatusOK, gin.H{"message": "降价提醒已开启", "price_alert": a})
+}
+
+// UnsubscribePriceAlert removes a price-drop alert.
+func (h *Handler) UnsubscribePriceAlert(c *gin.Context) {
+	uid, ok := h.currentUserID(c)
+	if !ok {
+		return
+	}
+	pid, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的商品ID"})
+		return
+	}
+	_ = h.PriceAlert.Unsubscribe(uid, pid)
+	c.JSON(http.StatusOK, gin.H{"message": "已取消降价提醒"})
+}
+
+// CheckPriceAlert returns the current price-drop alert state for the signed-in
+// user (subscribed flag + target price). Anonymous callers get subscribed=false.
+func (h *Handler) CheckPriceAlert(c *gin.Context) {
+	uid, ok := h.currentUserID(c, true)
+	if !ok {
+		return
+	}
+	pid, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"subscribed": false, "target_price": 0})
+		return
+	}
+	a, _ := h.PriceAlert.Get(uid, pid)
+	if a == nil {
+		c.JSON(http.StatusOK, gin.H{"subscribed": false, "target_price": 0})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"subscribed": true, "target_price": a.TargetPrice})
+}
+
 // ===================== Product Q&A (商品问答) =====================
 
 func (h *Handler) ListQA(c *gin.Context) {

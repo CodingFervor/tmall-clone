@@ -1471,6 +1471,51 @@ func (r *RestockRepo) IsSubscribed(userID, productID int64) bool {
 	return n == 1
 }
 
+// ===================== Price alerts (降价提醒) =====================
+
+type PriceAlertRepo struct{ db *sql.DB }
+
+func NewPriceAlertRepo(db *sql.DB) *PriceAlertRepo { return &PriceAlertRepo{db: db} }
+
+// Subscribe creates or updates a price-drop alert for a product. Re-subscribing
+// with a new target price updates the existing row and resets the notified flag.
+func (r *PriceAlertRepo) Subscribe(userID, productID int64, targetPrice float64) error {
+	_, err := r.db.Exec(
+		`INSERT INTO price_alerts (user_id, product_id, target_price, notified)
+		 VALUES (?,?,?,0)
+		 ON CONFLICT(user_id, product_id) DO UPDATE SET target_price=excluded.target_price, notified=0`,
+		userID, productID, targetPrice)
+	return err
+}
+
+// Unsubscribe removes a price-drop alert.
+func (r *PriceAlertRepo) Unsubscribe(userID, productID int64) error {
+	_, err := r.db.Exec(`DELETE FROM price_alerts WHERE user_id=? AND product_id=?`, userID, productID)
+	return err
+}
+
+// Get returns the current price-drop alert for a user + product, or nil if none.
+func (r *PriceAlertRepo) Get(userID, productID int64) (*model.PriceAlert, error) {
+	a := &model.PriceAlert{}
+	err := r.db.QueryRow(
+		`SELECT id, user_id, product_id, target_price, notified, created_at
+		 FROM price_alerts WHERE user_id=? AND product_id=?`, userID, productID,
+	).Scan(&a.ID, &a.UserID, &a.ProductID, &a.TargetPrice, &a.Notified, &a.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return a, nil
+}
+
+// IsSubscribed reports whether the user has an active price-drop alert.
+func (r *PriceAlertRepo) IsSubscribed(userID, productID int64) bool {
+	a, _ := r.Get(userID, productID)
+	return a != nil
+}
+
 // ===================== Product Q&A (商品问答) =====================
 
 type QARepo struct{ db *sql.DB }

@@ -40,6 +40,7 @@ type Handler struct {
 	ShopRating   *repository.ShopRatingRepo
 	Bundle       *repository.BundleRepo
 	Restock      *repository.RestockRepo
+	PriceAlert   *repository.PriceAlertRepo
 	QA           *repository.QARepo
 	Invoice      *repository.InvoiceRepo
 	Tiered       *repository.TieredDiscountRepo
@@ -95,6 +96,11 @@ func (h *Handler) SetShopRating(sr *repository.ShopRatingRepo) {
 func (h *Handler) SetBundle(b *repository.BundleRepo, r *repository.RestockRepo) {
 	h.Bundle = b
 	h.Restock = r
+}
+
+// SetPriceAlert attaches the price-drop-alert (降价提醒) repo.
+func (h *Handler) SetPriceAlert(pa *repository.PriceAlertRepo) {
+	h.PriceAlert = pa
 }
 
 // SetQA attaches the product-Q&A repo.

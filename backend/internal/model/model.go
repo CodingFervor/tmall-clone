@@ -101,6 +101,22 @@ type RestockAlert struct {
 	Notified  int   `json:"notified"`
 }
 
+// PriceAlert is a user's subscription to be notified when a product's price
+// drops to (or below) a target price (降价提醒).
+type PriceAlert struct {
+	ID          int64   `json:"id"`
+	UserID      int64   `json:"user_id"`
+	ProductID   int64   `json:"product_id"`
+	TargetPrice float64 `json:"target_price"`
+	Notified    int     `json:"notified"`
+	CreatedAt   string  `json:"created_at"`
+}
+
+// PriceAlertInput is the body of a create/update price-alert request.
+type PriceAlertInput struct {
+	TargetPrice float64 `json:"target_price"`
+}
+
 // ProductQA is a buyer's question about a product + optional seller answer (商品问答).
 type ProductQA struct {
 	ID        int64     `json:"id"`

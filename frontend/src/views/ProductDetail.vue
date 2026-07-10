@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showDialog } from 'vant'
-import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock, getProductQA, askProductQA, markReviewUseful } from '../api'
+import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFavorite, toggleFavorite, replyReview, getPriceHistory, checkRestock, subscribeRestock, unsubscribeRestock, getProductQA, askProductQA, markReviewUseful, checkPriceAlert, subscribePriceAlert, unsubscribePriceAlert } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,6 +15,10 @@ const priceHistory = ref([])
 const priceStats = ref(null)
 const showPoster = ref(false)
 const restockSubscribed = ref(false)
+const priceAlertSubscribed = ref(false)
+const priceAlertTarget = ref(0)
+const showPriceAlert = ref(false)
+const priceAlertInput = ref(0)
 const qaList = ref([])
 const showQA = ref(false)
 const qaQuestion = ref('')
@@ -96,6 +100,7 @@ onMounted(async () => {
     }
     getPriceHistory(route.params.id).then((d) => { priceHistory.value = d.data || []; priceStats.value = d.stats }).catch(() => {})
     if (localStorage.getItem('tm_token')) { checkRestock(route.params.id).then((s) => { restockSubscribed.value = s }).catch(() => {}) }
+    if (localStorage.getItem('tm_token')) { checkPriceAlert(route.params.id).then((d) => { priceAlertSubscribed.value = !!d.subscribed; priceAlertTarget.value = d.target_price || 0 }).catch(() => {}) }
     getProductQA(route.params.id).then((d) => { qaList.value = d || [] }).catch(() => {})
   } catch (e) {
     showToast('商品不存在')
@@ -187,6 +192,30 @@ async function toggleRestock() {
   try {
     if (restockSubscribed.value) { await unsubscribeRestock(product.value.id); restockSubscribed.value = false; showSuccessToast('已取消到货通知') }
     else { await subscribeRestock(product.value.id); restockSubscribed.value = true; showSuccessToast('到货后将通知您') }
+  } catch (e) { showToast('操作失败') }
+}
+// Open the price-drop alert popup. Default the target to 90% of the current price
+// (or the previously saved target if already subscribed).
+function openPriceAlert() {
+  if (!localStorage.getItem('tm_token')) { showDialog({ title: '提示', message: '请先登录' }).then(() => router.push('/login')); return }
+  const base = priceAlertTarget.value > 0 ? priceAlertTarget.value : Math.round(currentPrice() * 0.9 * 100) / 100
+  priceAlertInput.value = base
+  showPriceAlert.value = true
+}
+async function submitPriceAlert() {
+  const target = Number(priceAlertInput.value)
+  if (!target || target <= 0) { showToast('请输入有效的目标价'); return }
+  if (target >= currentPrice()) { showToast('目标价需低于当前价'); return }
+  try {
+    await subscribePriceAlert(product.value.id, target)
+    priceAlertSubscribed.value = true; priceAlertTarget.value = target; showPriceAlert.value = false
+    showSuccessToast('降价后将通知您')
+  } catch (e) { showToast('订阅失败') }
+}
+async function cancelPriceAlert() {
+  try {
+    await unsubscribePriceAlert(product.value.id)
+    priceAlertSubscribed.value = false; priceAlertTarget.value = 0; showSuccessToast('已取消降价提醒')
   } catch (e) { showToast('操作失败') }
 }
 async function submitQA() {
@@ -291,6 +320,20 @@ function deliveryEstimate() {
           <span class="ph-date">{{ b.date }}</span>
         </div>
       </div>
+      <!-- Price drop alert (降价提醒) -->
+      <div class="ph-alert">
+        <template v-if="!priceAlertSubscribed">
+          <span class="pha-icon">🔔</span>
+          <span class="pha-text">心仪好价？设置降价提醒</span>
+          <van-button size="mini" type="danger" round @click="openPriceAlert">降价提醒</van-button>
+        </template>
+        <template v-else>
+          <span class="pha-icon">✅</span>
+          <span class="pha-text">已订阅，降到 <b class="pha-target">¥{{ fmt(priceAlertTarget) }}</b> 将通知您</span>
+          <van-button size="mini" plain round @click="openPriceAlert">修改</van-button>
+          <van-button size="mini" plain round @click="cancelPriceAlert">取消</van-button>
+        </template>
+      </div>
     </div>
     <!-- Product Q&A (商品问答) -->
     <div class="qa-section">
@@ -303,6 +346,19 @@ function deliveryEstimate() {
     </div>
     <van-popup v-model:show="showQA" position="bottom" round closeable>
       <div class="qa-form"><h3>我要提问</h3><van-field v-model="qaQuestion" type="textarea" placeholder="说说你想了解的问题" rows="3" /><van-button type="danger" block @click="submitQA" style="margin-top:12px">提交问题</van-button></div>
+    </van-popup>
+    <!-- Price drop alert popup (降价提醒) -->
+    <van-popup v-model:show="showPriceAlert" position="bottom" round closeable>
+      <div class="pa-form">
+        <h3>降价提醒</h3>
+        <p class="pa-tip">当商品价格降至目标价时，我们将第一时间通知您</p>
+        <div class="pa-cur">当前价格：<b class="pa-cur-price">¥{{ fmt(currentPrice()) }}</b></div>
+        <van-field v-model="priceAlertInput" type="number" label="目标价格" placeholder="设置期望价格" input-align="right">
+          <template #left-icon><span class="pa-yuan">¥</span></template>
+        </van-field>
+        <van-button type="danger" block round @click="submitPriceAlert" style="margin-top:16px">{{ priceAlertSubscribed ? '更新提醒' : '开启提醒' }}</van-button>
+        <van-button v-if="priceAlertSubscribed" block plain round @click="cancelPriceAlert(); showPriceAlert = false" style="margin-top:8px">取消提醒</van-button>
+      </div>
     </van-popup>
     <div v-if="product.description" class="desc"><h3>商品详情</h3><p>{{ product.description }}</p></div>
     <div class="reviews">
@@ -472,6 +528,17 @@ function deliveryEstimate() {
 .ph-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
 .ph-bar { width: 60%; background: linear-gradient(180deg, #ff9800, #ff0036); border-radius: 3px 3px 0 0; min-height: 8px; }
 .ph-date { font-size: 9px; color: #999; margin-top: 4px; }
+/* Price drop alert (降价提醒) */
+.ph-alert { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 10px 12px; background: #fff5f6; border: 1px solid #ffd6df; border-radius: 8px; }
+.pha-icon { font-size: 16px; }
+.pha-text { flex: 1; font-size: 13px; color: #333; line-height: 18px; }
+.pha-text b.pha-target { color: #ff0036; }
+.pa-form { padding: 20px; }
+.pa-form h3 { text-align: center; margin-bottom: 8px; }
+.pa-tip { font-size: 12px; color: #999; text-align: center; margin-bottom: 16px; }
+.pa-cur { font-size: 13px; color: #666; margin-bottom: 12px; }
+.pa-cur-price { color: #ff0036; font-size: 18px; }
+.pa-yuan { color: #ff0036; font-weight: bold; }
 .desc h3, .rev-head { font-size: 15px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
 /* Review summary stats (评价概览统计) */
 .rev-summary { display: flex; gap: 16px; padding: 12px 0; border-top: 1px solid #f5f5f5; }
