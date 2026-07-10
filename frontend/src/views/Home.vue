@@ -58,6 +58,14 @@ onUnmounted(() => {
   if (flashTimer) clearTimeout(flashTimer)
 })
 function fmt(n) { return Number(n).toFixed(2) }
+
+// New product (新品限时标签): products created within the last 7 days.
+function isNew(p) {
+  if (!p || !p.created_at) return false
+  const created = new Date(p.created_at)
+  if (isNaN(created.getTime())) return false
+  return (Date.now() - created.getTime()) <= 7 * 24 * 3600 * 1000
+}
 </script>
 
 <template>
@@ -110,6 +118,7 @@ function fmt(n) { return Number(n).toFixed(2) }
       <div class="section-head"><span>为你推荐</span></div>
       <div class="product-grid">
         <div v-for="p in products" :key="p.id" class="product-card" @click="router.push('/product/' + p.id)">
+          <div class="new-badge" v-if="isNew(p)">NEW</div>
           <van-image width="100%" height="170" :src="p.image" fit="cover" radius="6" />
           <div class="p-tag" v-if="p.is_genuine"><span class="genuine-tag">正品保障</span></div>
           <div class="p-name van-multi-ellipsis--l2">{{ p.name }}</div>
@@ -154,7 +163,8 @@ function fmt(n) { return Number(n).toFixed(2) }
 .brand-name { font-size: 12px; margin-top: 6px; }
 .brand-fans { font-size: 10px; color: #999; }
 .product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.product-card { background: #fafafa; border-radius: 8px; overflow: hidden; padding-bottom: 6px; }
+.product-card { background: #fafafa; border-radius: 8px; overflow: hidden; padding-bottom: 6px; position: relative; }
+.new-badge { position: absolute; top: 6px; left: 6px; z-index: 5; background: #ff0036; color: #fff; font-size: 11px; font-weight: bold; line-height: 1; padding: 3px 7px; border-radius: 999px; box-shadow: 0 1px 4px rgba(255, 0, 54, 0.45); letter-spacing: 0.5px; }
 .p-tag { padding: 2px 6px; }
 .p-name { font-size: 13px; line-height: 18px; padding: 0 6px; height: 36px; }
 .p-shop { font-size: 11px; color: #999; padding: 0 6px; }

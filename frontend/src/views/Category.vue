@@ -37,6 +37,14 @@ const filteredProducts = computed(() => {
 
 function fmt(n) { return Number(n).toFixed(2) }
 
+// New product (新品限时标签): products created within the last 7 days.
+function isNew(p) {
+  if (!p || !p.created_at) return false
+  const created = new Date(p.created_at)
+  if (isNaN(created.getTime())) return false
+  return (Date.now() - created.getTime()) <= 7 * 24 * 3600 * 1000
+}
+
 function isInCompare(p) { return compareList.value.some(c => c.id === p.id) }
 function toggleCompare(p) {
   const idx = compareList.value.findIndex(c => c.id === p.id)
@@ -79,7 +87,10 @@ function cheaperIndex() {
         <div v-if="loading" class="loading"><van-loading /></div>
         <div v-else>
           <div v-for="p in filteredProducts" :key="p.id" class="prod-row" :class="{ selected: isInCompare(p) }" @click="router.push('/product/' + p.id)">
-            <van-image width="100" height="100" radius="6" :src="p.image" fit="cover" />
+            <div class="prod-thumb">
+              <van-image width="100" height="100" radius="6" :src="p.image" fit="cover" />
+              <div class="new-badge" v-if="isNew(p)">NEW</div>
+            </div>
             <div class="prod-info">
               <div class="prod-name van-multi-ellipsis--l2">{{ p.name }}</div>
               <div class="prod-sub van-ellipsis">{{ p.subtitle }}</div>
@@ -139,6 +150,8 @@ function cheaperIndex() {
 .sort-bar span { flex: 1; text-align: center; padding: 10px 0; font-size: 13px; color: #666; }
 .sort-bar span.active { color: #ff0036; font-weight: bold; }
 .prod-row { display: flex; gap: 10px; padding: 10px; border-bottom: 1px solid #f5f5f5; }
+.prod-thumb { position: relative; flex-shrink: 0; }
+.new-badge { position: absolute; top: 4px; left: 4px; z-index: 5; background: #ff0036; color: #fff; font-size: 11px; font-weight: bold; line-height: 1; padding: 3px 7px; border-radius: 999px; box-shadow: 0 1px 4px rgba(255, 0, 54, 0.45); letter-spacing: 0.5px; }
 .prod-info { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
 .prod-name { font-size: 13px; line-height: 18px; }
 .prod-sub { font-size: 11px; color: #999; }
