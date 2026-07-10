@@ -60,6 +60,28 @@ async function onUploadReviewImage(item) {
   try { const res = await uploadImage(item.file); reviewImages.value.push(res.url) } catch (e) { showToast('图片上传失败') }
 }
 function removeReviewImage(idx) { reviewImages.value.splice(idx, 1) }
+// Video reviews (视频评价): a video URL entered by the user is stored with a
+// "video:" prefix in the comma-separated images field alongside photos.
+// Only one video per review; blank/whitespace-only input is ignored.
+const reviewVideo = ref('')
+const showVideoInput = ref(false)
+function addReviewVideo() {
+  const url = reviewVideo.value.trim()
+  if (!url) { showToast('请输入视频链接'); return }
+  if (!/^https?:\/\//i.test(url)) { showToast('请输入有效的视频链接'); return }
+  reviewVideo.value = ''
+  showSuccessToast('视频已添加')
+}
+function removeReviewVideo() { reviewVideo.value = '' }
+// Parse a review's comma-separated images field into media entries.
+// Entries prefixed with "video:" render as a <video> player; the rest are photos.
+function reviewMedia(r) {
+  if (!r.images) return []
+  return r.images.split(',').map((s) => s.trim()).filter(Boolean).map((raw) => {
+    if (raw.startsWith('video:')) return { type: 'video', url: raw.slice(6) }
+    return { type: 'image', url: raw }
+  })
+}
 
 onMounted(async () => {
   try {
@@ -106,8 +128,12 @@ function checkLogin() {
 async function submitReview() {
   if (!reviewContent.value.trim()) { showToast('请输入评价'); return }
   try {
-    const rv = await createReview({ product_id: product.value.id, rating: reviewRating.value, content: reviewContent.value, images: reviewImages.value.join(',') })
-    reviews.value.unshift(rv); showReview.value = false; reviewContent.value = ''; reviewImages.value = []; showSuccessToast('评价成功')
+    // Combine photos and the optional video (prefixed "video:") into one images field.
+    const parts = reviewImages.value.slice()
+    const vid = reviewVideo.value.trim()
+    if (vid) parts.push('video:' + vid)
+    const rv = await createReview({ product_id: product.value.id, rating: reviewRating.value, content: reviewContent.value, images: parts.join(',') })
+    reviews.value.unshift(rv); showReview.value = false; reviewContent.value = ''; reviewImages.value = []; reviewVideo.value = ''; showSuccessToast('评价成功')
   } catch (e) { showToast('请先登录') }
 }
 const replyingTo = ref(null)
@@ -299,8 +325,11 @@ function deliveryEstimate() {
       <div v-for="r in reviews" :key="r.id" class="rev-item">
         <div class="rev-user"><span>{{ r.username }}</span><van-rate v-model="r.rating" readonly size="12" /><span class="rev-reply-btn" @click="toggleReply(r)">回复</span></div>
         <div class="rev-content">{{ r.content }}</div>
-        <div v-if="r.images" class="rev-photos">
-          <van-image v-for="(img, i) in r.images.split(',')" :key="i" width="72" height="72" radius="6" :src="img" fit="cover" />
+        <div v-if="reviewMedia(r).length" class="rev-photos">
+          <template v-for="(m, i) in reviewMedia(r)" :key="i">
+            <video v-if="m.type === 'video'" :src="m.url" controls preload="metadata" class="rev-video"></video>
+            <van-image v-else width="72" height="72" radius="6" :src="m.url" fit="cover" />
+          </template>
         </div>
         <div class="rev-actions"><span class="rev-useful-btn" @click="doUseful(r)"><van-icon name="good-job-o" /> 有用 ({{ r.useful || 0 }})</span></div>
         <div v-if="r.reply" class="rev-reply"><span class="rev-reply-name">{{ r.reply.username }}：</span>{{ r.reply.content }}</div>
@@ -366,7 +395,19 @@ function deliveryEstimate() {
             </div>
           </div>
         </div>
-        <van-button type="danger" block @click="submitReview">提交评价</van-button>
+        <!-- Video review (视频评价): paste a video URL; stored as "video:URL" in images. -->
+        <div class="rev-video-upload">
+          <van-button icon="video-o" size="small" plain round @click="showVideoInput = !showVideoInput">添加视频</van-button>
+          <div v-if="showVideoInput" class="rev-video-input">
+            <van-field v-model="reviewVideo" placeholder="粘贴视频链接 https://..." clearable />
+            <van-button size="small" type="danger" @click="addReviewVideo">添加</van-button>
+          </div>
+          <div v-if="reviewVideo" class="rev-video-chip">
+            <span class="rv-chip-text van-ellipsis">🎬 {{ reviewVideo }}</span>
+            <van-icon name="cross" class="rv-chip-del" @click="removeReviewVideo" />
+          </div>
+        </div>
+        <van-button type="danger" block @click="submitReview" style="margin-top:12px">提交评价</van-button>
       </div>
     </van-popup>
   </div>
@@ -463,6 +504,14 @@ function deliveryEstimate() {
 .rev-imgs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .rev-img-wrap { position: relative; }
 .rev-img-del { position: absolute; top: -6px; right: -6px; background: #ff0036; color: #fff; border-radius: 50%; padding: 2px; font-size: 12px; }
+/* Video review (视频评价) */
+.rev-video { width: 200px; height: 200px; border-radius: 6px; background: #000; object-fit: cover; }
+.rev-video-upload { margin: 8px 0; }
+.rev-video-input { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.rev-video-input .van-field { flex: 1; border: 1px solid #eee; border-radius: 6px; }
+.rev-video-chip { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding: 6px 10px; background: #fff5f6; border: 1px solid #ffd6df; border-radius: 6px; }
+.rv-chip-text { font-size: 12px; color: #ff0036; flex: 1; }
+.rv-chip-del { color: #ff0036; font-size: 14px; cursor: pointer; }
 .poster { padding: 20px; }
 .poster-head { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 16px; }
 .poster-card { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 16px; text-align: center; }

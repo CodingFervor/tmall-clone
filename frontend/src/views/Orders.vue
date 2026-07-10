@@ -104,6 +104,37 @@ async function onSelectRefundType(action) {
 function statusText(s) { return { pending: '待付款', paid: '已付款', shipped: '已发货', completed: '已完成', cancelled: '已取消' }[s] || s }
 function fmt(n) { return Number(n).toFixed(2) }
 function parseItems(json) { try { return JSON.parse(json) } catch { return [] } }
+
+// Order lifecycle timeline (订单全流程时间线): per-order expanded state keyed by order id.
+const expanded = ref({})
+function toggleProgress(o) { expanded.value[o.id] = !expanded.value[o.id] }
+// Format an ISO timestamp to MM-dd HH:mm for timeline display.
+function fmtTime(t) {
+  if (!t) return ''
+  const d = new Date(t)
+  if (isNaN(d.getTime())) return ''
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mi = String(d.getMinutes()).padStart(2, '0')
+  return `${mm}-${dd} ${hh}:${mi}`
+}
+// Build the lifecycle stages for an order. The backend model only stores
+// created_at, so the reached stage is derived from the status field:
+// pending→0, paid→1, shipped→2, completed→3. Only created_at has a real
+// timestamp; reached later stages reuse created_at as an approximate marker
+// since per-stage timestamps aren't persisted.
+function timelineStages(o) {
+  const statusOrder = ['pending', 'paid', 'shipped', 'completed']
+  const reached = statusOrder.indexOf(o.status)
+  const created = fmtTime(o.created_at)
+  return [
+    { icon: '📝', label: '下单', time: created, reached: reached >= 0, current: o.status !== 'cancelled' && reached === 0 },
+    { icon: '💰', label: '已付', time: reached >= 1 ? created : '', reached: reached >= 1, current: reached === 1 },
+    { icon: '📦', label: '已发', time: reached >= 2 ? created : '', reached: reached >= 2, current: reached === 2 },
+    { icon: '✅', label: '完成', time: reached >= 3 ? created : '', reached: reached >= 3, current: reached === 3 },
+  ]
+}
 // Group an order's items into shipment packages (拆包发货) by shop.
 // Returns an array of { shop, items }. Items without a shop fall into a single group.
 function packagesOf(o) {
@@ -154,6 +185,22 @@ function packagesOf(o) {
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain type="danger" round @click="viewLogistics(o)">查看物流</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain @click="applyRefund(o)">申请售后</van-button>
             <van-button v-if="o.status === 'completed'" size="small" type="danger" round :loading="repurchasing" @click="repurchase(o)">再次购买</van-button>
+            <!-- Order lifecycle timeline toggle (订单全流程时间线) -->
+            <van-button size="small" plain round @click="toggleProgress(o)">{{ expanded[o.id] ? '收起进度' : '查看进度' }}</van-button>
+          </div>
+        </div>
+        <!-- Vertical lifecycle timeline; collapsed by default, current stage highlighted red. -->
+        <div v-if="expanded[o.id]" class="o-timeline">
+          <div v-for="(st, si) in timelineStages(o)" :key="si" class="tl-stage" :class="{ 'tl-current': st.current, 'tl-done': st.reached && !st.current }">
+            <div class="tl-rail">
+              <span class="tl-dot">{{ st.icon }}</span>
+              <span v-if="si < timelineStages(o).length - 1" class="tl-line"></span>
+            </div>
+            <div class="tl-body">
+              <div class="tl-label">{{ st.label }}</div>
+              <div v-if="st.time" class="tl-time">{{ st.time }}</div>
+              <div v-else class="tl-time tl-pending">待处理</div>
+            </div>
           </div>
         </div>
       </div>
@@ -181,4 +228,20 @@ function packagesOf(o) {
 .o-foot { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid #f5f5f5; margin-top: 8px; font-size: 13px; }
 .o-actions { display: flex; gap: 8px; }
 .o-actions { display: flex; gap: 8px; }
+/* Order lifecycle timeline (订单全流程时间线) */
+.o-timeline { margin-top: 10px; padding: 10px 12px; background: #fafafa; border-radius: 8px; border: 1px solid #f0f0f0; }
+.tl-stage { display: flex; align-items: flex-start; }
+.tl-rail { display: flex; flex-direction: column; align-items: center; width: 22px; flex-shrink: 0; }
+.tl-dot { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 11px; z-index: 1; }
+.tl-line { flex: 1; width: 2px; min-height: 22px; background: #ddd; margin-top: 2px; }
+.tl-body { padding: 0 0 14px 10px; flex: 1; }
+.tl-stage:last-child .tl-body { padding-bottom: 0; }
+.tl-label { font-size: 13px; color: #999; }
+.tl-time { font-size: 11px; color: #bbb; margin-top: 2px; }
+.tl-time.tl-pending { color: #ccc; }
+.tl-done .tl-dot { border-color: #ff0036; background: #fff5f6; }
+.tl-done .tl-label { color: #666; }
+.tl-current .tl-dot { border-color: #ff0036; background: #ff0036; box-shadow: 0 0 0 4px rgba(255, 0, 54, 0.12); }
+.tl-current .tl-label { color: #ff0036; font-weight: bold; }
+.tl-current .tl-time { color: #ff0036; }
 </style>
