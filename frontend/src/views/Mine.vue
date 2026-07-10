@@ -279,4 +279,16 @@ function logout() { localStorage.removeItem('tm_token'); localStorage.removeItem
 .ov-badge.lv-gradient .ov-icon { background: linear-gradient(135deg, #ff0036, #a855f7, #22d3ee, #ffd700); }
 .ov-name { font-size: 12px; color: #333; }
 .ov-min { font-size: 10px; color: #999; }
+
+/* 深色模式下的个人页样式 (scoped dark overrides) */
+:global(html.dark-mode) .growth-section { background: #2a2a2a; }
+:global(html.dark-mode) .growth-title { color: #fff; }
+:global(html.dark-mode) .bar-track { background: #3a3a3a; }
+:global(html.dark-mode) .bar-labels,
+:global(html.dark-mode) .growth-foot { color: #aaa; }
+:global(html.dark-mode) .badges-overview { border-top-color: #444; }
+:global(html.dark-mode) .ov-name { color: #ddd; }
+:global(html.dark-mode) .ov-min { color: #888; }
+:global(html.dark-mode) .stats-row { background: #2a2a2a; }
+:global(html.dark-mode) .stat-label { color: #aaa; }
 </style>

@@ -14,6 +14,45 @@ const searched = ref(false)
 // "hot search + history" discovery panel.
 const focused = ref(false)
 
+// ---- 语音搜索 (voice search) — Web Speech API ----
+const voiceListening = ref(false)
+let recognition = null
+function startVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SR) {
+    showToast('当前浏览器不支持语音搜索')
+    return
+  }
+  // Stop any in-progress session before starting a new one.
+  if (recognition) { try { recognition.stop() } catch (_) {} }
+  recognition = new SR()
+  recognition.lang = 'zh-CN'
+  recognition.interimResults = false
+  recognition.maxAlternatives = 1
+  recognition.onstart = () => { voiceListening.value = true }
+  recognition.onerror = (e) => {
+    voiceListening.value = false
+    if (e.error === 'no-speech') showToast('没有听到声音，请重试')
+    else if (e.error === 'not-allowed') showToast('请允许使用麦克风')
+    else showToast('语音识别失败')
+  }
+  recognition.onend = () => { voiceListening.value = false }
+  recognition.onresult = (event) => {
+    const text = event.results[0][0].transcript
+    if (text) {
+      keyword.value = text
+      doSearch(text) // fill input + auto-search on result
+    }
+  }
+  try {
+    recognition.start()
+  } catch (_) {
+    showToast('无法启动语音识别')
+    voiceListening.value = false
+  }
+}
+onUnmounted(() => { if (recognition) { try { recognition.stop() } catch (_) {} } })
+
 const HISTORY_KEY = 'tm_search_history'
 const history = ref(JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'))
 const hotList = ['小棕瓶', 'SK-II', 'iPhone', 'Nike', '奶粉']
@@ -88,6 +127,10 @@ function fmt(n) { return Number(n).toFixed(2) }
         @focus="onFocus"
         @blur="onBlur"
       >
+        <!-- 语音搜索按钮 (voice search) -->
+        <template #left-icon>
+          <span class="voice-btn" :class="{ listening: voiceListening }" @click="startVoice">🎤</span>
+        </template>
         <template #action><span @click="onCancel">取消</span></template>
       </van-search>
       <!-- real-time suggestions dropdown -->
@@ -136,6 +179,10 @@ function fmt(n) { return Number(n).toFixed(2) }
 
 <style scoped>
 .search-page { min-height: 100vh; }
+/* 语音搜索按钮 (voice search) */
+.voice-btn { font-size: 20px; cursor: pointer; padding: 0 4px; user-select: none; }
+.voice-btn.listening { animation: voice-pulse 1s ease-in-out infinite; }
+@keyframes voice-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
 .suggest-list { background: #fff; border-top: 1px solid #eee; }
 .suggest-item { padding: 12px 16px; font-size: 14px; color: #333; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #f5f5f5; }
 .suggest-text { flex: 1; }

@@ -14,3 +14,33 @@ ul, li { list-style: none; }
 a { text-decoration: none; color: inherit; }
 .app-wrap { max-width: 750px; margin: 0 auto; min-height: 100vh; background: #f5f5f5; padding-bottom: 50px; }
 .genuine-tag { color: #ff0036; font-size: 11px; border: 1px solid #ff0036; padding: 0 4px; border-radius: 3px; }
+
+/* ---- 深色模式 (dark mode) ----
+   Applied by toggling the 'dark-mode' class on the root <html> element.
+   Background #1a1a1a, text #fff, cards #2a2a2a. */
+html.dark-mode body { background: #1a1a1a; color: #fff; }
+html.dark-mode .app-wrap { background: #1a1a1a; color: #fff; }
+html.dark-mode .price { color: #ff4d6d; }
+html.dark-mode .tm-red { color: #ff4d6d; }
+html.dark-mode .genuine-tag { color: #ff4d6d; border-color: #ff4d6d; }
+/* Cards & surfaces (van-cell groups, popups, common white panels) */
+html.dark-mode .van-cell { background: #2a2a2a; color: #fff; }
+html.dark-mode .van-cell__title,
+html.dark-mode .van-cell__value { color: #e6e6e6; }
+html.dark-mode .van-cell__value { color: #aaa; }
+html.dark-mode .van-cell-group { background: #1a1a1a; }
+html.dark-mode .van-cell-group--inset { background: #2a2a2a; }
+html.dark-mode .van-cell-group__title { color: #ccc; background: #1a1a1a; }
+html.dark-mode .van-popup { background: #2a2a2a; color: #fff; }
+html.dark-mode .van-nav-bar { background: #2a2a2a; }
+html.dark-mode .van-nav-bar__title { color: #fff; }
+html.dark-mode .van-nav-bar .van-icon { color: #fff; }
+html.dark-mode .van-search { background: #2a2a2a; }
+html.dark-mode .van-search__content { background: #3a3a3a; }
+html.dark-mode .van-field__control { color: #fff; }
+html.dark-mode .van-field__control::placeholder { color: #888; }
+html.dark-mode .van-tabbar { background: #2a2a2a; }
+html.dark-mode .van-empty__description { color: #aaa; }
+html.dark-mode .van-tag--plain { color: #ddd; }
+html.dark-mode .van-button--plain { color: #fff; }
+html.dark-mode .van-loading__spinner { color: #ff4d6d; }
