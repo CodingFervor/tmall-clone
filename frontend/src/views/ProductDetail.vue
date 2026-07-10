@@ -121,6 +121,31 @@ async function submitReply(r) {
   } catch (e) { showToast('请先登录') }
 }
 function selectSKU(sku) { selectedSKU.value = sku }
+// SKU spec matrix table (商品规格矩阵表): when a product has 2+ SKUs whose
+// spec JSON carries 2+ dimensions (e.g. {"颜色":"黑色","版本":"256GB"}), build a
+// table with one column per dimension plus price & stock. SKUs with unparseable
+// specs are dropped; if fewer than 2 valid rows or a single dimension remain, the
+// matrix is hidden.
+const specMatrix = computed(() => {
+  if (!skus.value || skus.value.length < 2) return null
+  const dims = []
+  const seen = new Set()
+  const rows = []
+  for (const s of skus.value) {
+    let spec = null
+    try { spec = JSON.parse(s.spec) } catch { spec = null }
+    if (!spec || typeof spec !== 'object' || Array.isArray(spec)) continue
+    const values = {}
+    for (const [k, v] of Object.entries(spec)) {
+      values[k] = String(v)
+      if (!seen.has(k)) { seen.add(k); dims.push(k) }
+    }
+    if (!Object.keys(values).length) continue
+    rows.push({ sku: s, values })
+  }
+  if (rows.length < 2 || dims.length < 2) return null
+  return { dims, rows }
+})
 function currentPrice() { return selectedSKU.value ? selectedSKU.value.price : (product.value ? product.value.price : 0) }
 function fmt(n) { return Number(n).toFixed(2) }
 function goProduct(id) { router.replace('/product/' + id); setTimeout(() => window.location.reload(), 50) }
@@ -191,6 +216,23 @@ function deliveryEstimate() {
       <div class="sku-tags">
         <span v-for="s in skus" :key="s.id" class="sku-tag" :class="{ active: selectedSKU && selectedSKU.id === s.id }" @click="selectSKU(s)">{{ s.spec_text }} <small>¥{{ fmt(s.price) }}</small></span>
       </div>
+      <!-- SKU spec matrix table (商品规格矩阵表) -->
+      <table v-if="specMatrix" class="spec-matrix">
+        <thead>
+          <tr>
+            <th v-for="d in specMatrix.dims" :key="d">{{ d }}</th>
+            <th>价格</th>
+            <th>库存</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in specMatrix.rows" :key="r.sku.id" :class="{ 'row-active': selectedSKU && selectedSKU.id === r.sku.id }" @click="selectSKU(r.sku)">
+            <td v-for="d in specMatrix.dims" :key="d">{{ r.values[d] || '-' }}</td>
+            <td class="sm-price">¥{{ fmt(r.sku.price) }}</td>
+            <td class="sm-stock" :class="{ 'stock-low': r.sku.stock <= 10 }">{{ r.sku.stock > 0 ? r.sku.stock : '缺货' }}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
     <div class="title-block">
       <div v-if="product.is_genuine" class="genuine-row"><span class="genuine-tag">正品保障</span> <span class="brand-link" v-if="product.brand_id" @click="router.push('/brand/' + product.brand_id)">{{ product.brand_name }} ›</span></div>
@@ -358,6 +400,17 @@ function deliveryEstimate() {
 .sku-tag { padding: 6px 12px; background: #f7f7f7; border: 1px solid #eee; border-radius: 16px; font-size: 13px; color: #333; }
 .sku-tag.active { background: #fff5f6; border-color: #ff0036; color: #ff0036; }
 .sku-tag small { color: #ff0036; margin-left: 4px; }
+/* SKU spec matrix table (商品规格矩阵表) */
+.spec-matrix { width: 100%; margin-top: 12px; border-collapse: collapse; font-size: 12px; }
+.spec-matrix th, .spec-matrix td { border: 1px solid #f0f0f0; padding: 6px 4px; text-align: center; white-space: nowrap; }
+.spec-matrix thead th { background: #fafafa; color: #999; font-weight: normal; }
+.spec-matrix tbody tr { transition: background 0.15s; }
+.spec-matrix tbody tr:active { background: #fff5f6; }
+.spec-matrix tr.row-active { background: #fff5f6; }
+.spec-matrix tr.row-active td { border-color: #ffc6cf; }
+.sm-price { color: #ff0036; font-weight: bold; }
+.sm-stock { color: #666; }
+.sm-stock.stock-low { color: #ff9800; }
 .title-block { padding: 0 16px 12px; background: #fff; }
 .genuine-row { margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
 .brand-link { color: #ff0036; font-size: 12px; }

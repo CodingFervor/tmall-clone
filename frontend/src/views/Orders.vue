@@ -1,8 +1,10 @@
 <script setup>
 import { ref, onMounted, onUnmounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showSuccessToast } from 'vant'
-import { getOrders, payOrder, createRefund, confirmOrder, cancelOrder } from '../api'
+import { showToast, showSuccessToast, showLoadingToast, closeToast } from 'vant'
+import { getOrders, payOrder, createRefund, confirmOrder, cancelOrder, addToCart } from '../api'
+// Repurchase loading state (一键回购): prevent double-clicks and show per-button spinner.
+const repurchasing = ref(false)
 
 const router = useRouter()
 const orders = ref([])
@@ -60,6 +62,31 @@ async function cancel(o) {
   catch (e) { showToast(e.response?.data?.error || '操作失败') }
 }
 function viewLogistics(o) { router.push({ name: 'logistics', query: { order_id: o.id } }) }
+// One-click repurchase (一键回购): re-add all items of a completed order to the cart.
+// Parses items_json, extracts product_id + quantity, calls addToCart for each, then jumps to /cart.
+async function repurchase(o) {
+  const items = parseItems(o.items_json)
+  // Only items carrying a product_id can be re-ordered.
+  const buyable = items.filter((it) => it.product_id)
+  if (!buyable.length) { showToast('无可回购商品'); return }
+  if (repurchasing.value) return
+  repurchasing.value = true
+  showLoadingToast({ message: '加入购物车中...', forbidClick: true, duration: 0 })
+  try {
+    for (const it of buyable) {
+      const qty = Number(it.quantity) > 0 ? Number(it.quantity) : 1
+      await addToCart(it.product_id, qty)
+    }
+    closeToast()
+    showSuccessToast('已加入购物车')
+    router.push('/cart')
+  } catch (e) {
+    closeToast()
+    showToast(e.response?.data?.error || '回购失败')
+  } finally {
+    repurchasing.value = false
+  }
+}
 async function applyRefund(o) {
   refundOrder = o
   showRefundSheet.value = true
@@ -126,6 +153,7 @@ function packagesOf(o) {
             <van-button v-if="['shipped','completed'].includes(o.status)" size="small" type="danger" round @click="confirm(o)">确认收货</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain type="danger" round @click="viewLogistics(o)">查看物流</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain @click="applyRefund(o)">申请售后</van-button>
+            <van-button v-if="o.status === 'completed'" size="small" type="danger" round :loading="repurchasing" @click="repurchase(o)">再次购买</van-button>
           </div>
         </div>
       </div>
