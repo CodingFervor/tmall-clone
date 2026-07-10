@@ -33,6 +33,29 @@ const gallery = computed(() => {
   if (imgs.length) return imgs
   return product.value.image ? [product.value.image] : []
 })
+// Review summary stats (评价概览统计): average rating, good-rate (4-5★),
+// and per-star distribution counts (index 0 = 5★ ... index 4 = 1★).
+const reviewStats = computed(() => {
+  const rs = reviews.value
+  if (!rs.length) return { avg: 0, goodRate: 0, dist: [0, 0, 0, 0, 0] }
+  let sum = 0
+  const dist = [0, 0, 0, 0, 0]
+  let good = 0
+  for (const r of rs) {
+    sum += r.rating
+    const idx = 5 - r.rating
+    if (idx >= 0 && idx < 5) dist[idx]++
+    if (r.rating >= 4) good++
+  }
+  return {
+    avg: Math.round((sum / rs.length) * 10) / 10,
+    goodRate: Math.round((good / rs.length) * 100),
+    dist,
+  }
+})
+function starBarPct(count) {
+  return reviews.value.length ? (count / reviews.value.length) * 100 : 0
+}
 async function onUploadReviewImage(item) {
   try { const res = await uploadImage(item.file); reviewImages.value.push(res.url) } catch (e) { showToast('图片上传失败') }
 }
@@ -216,6 +239,21 @@ function deliveryEstimate() {
     <div v-if="product.description" class="desc"><h3>商品详情</h3><p>{{ product.description }}</p></div>
     <div class="reviews">
       <div class="rev-head"><span>商品评价 ({{ reviews.length }})</span><van-button size="mini" type="danger" plain @click="showReview = true">写评价</van-button></div>
+      <!-- Review summary stats (评价概览统计) -->
+      <div v-if="reviews.length" class="rev-summary">
+        <div class="rs-left">
+          <div class="rs-avg">{{ reviewStats.avg.toFixed(1) }}</div>
+          <van-rate :model-value="reviewStats.avg" allow-half readonly size="12" color="#ff0036" />
+          <div class="rs-goodrate">好评率 <b>{{ reviewStats.goodRate }}%</b></div>
+        </div>
+        <div class="rs-right">
+          <div v-for="(c, i) in reviewStats.dist" :key="i" class="rs-star-row">
+            <span class="rs-star-label">{{ 5 - i }}星</span>
+            <div class="rs-star-track"><div class="rs-star-fill" :style="{ width: starBarPct(c) + '%' }"></div></div>
+            <span class="rs-star-count">{{ c }}</span>
+          </div>
+        </div>
+      </div>
       <div v-for="r in reviews" :key="r.id" class="rev-item">
         <div class="rev-user"><span>{{ r.username }}</span><van-rate v-model="r.rating" readonly size="12" /><span class="rev-reply-btn" @click="toggleReply(r)">回复</span></div>
         <div class="rev-content">{{ r.content }}</div>
@@ -341,6 +379,18 @@ function deliveryEstimate() {
 .ph-bar { width: 60%; background: linear-gradient(180deg, #ff9800, #ff0036); border-radius: 3px 3px 0 0; min-height: 8px; }
 .ph-date { font-size: 9px; color: #999; margin-top: 4px; }
 .desc h3, .rev-head { font-size: 15px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+/* Review summary stats (评价概览统计) */
+.rev-summary { display: flex; gap: 16px; padding: 12px 0; border-top: 1px solid #f5f5f5; }
+.rs-left { flex: 0 0 90px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.rs-avg { font-size: 32px; font-weight: bold; color: #ff0036; line-height: 1.1; }
+.rs-goodrate { font-size: 12px; color: #666; }
+.rs-goodrate b { color: #ff0036; }
+.rs-right { flex: 1; display: flex; flex-direction: column; gap: 5px; justify-content: center; }
+.rs-star-row { display: flex; align-items: center; gap: 6px; }
+.rs-star-label { font-size: 11px; color: #999; width: 26px; flex-shrink: 0; }
+.rs-star-track { flex: 1; height: 7px; background: #f0f0f0; border-radius: 4px; overflow: hidden; }
+.rs-star-fill { height: 100%; background: #ff0036; border-radius: 4px; }
+.rs-star-count { font-size: 11px; color: #999; width: 24px; text-align: right; flex-shrink: 0; }
 .rev-item { padding: 10px 0; border-top: 1px solid #f5f5f5; }
 .rev-user { display: flex; gap: 8px; align-items: center; font-size: 13px; color: #666; }
 .rev-content { font-size: 13px; margin-top: 4px; line-height: 18px; }

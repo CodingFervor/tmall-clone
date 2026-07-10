@@ -110,6 +110,11 @@ async function toggleAll() {
   for (const it of items.value) { if (it.selected !== t) await updateCart(it.id, it.quantity, t) }
   await load()
 }
+// Invert selection (反选) — flip every item's selected state.
+async function invertSelection() {
+  for (const it of items.value) { await updateCart(it.id, it.quantity, it.selected === 1 ? 0 : 1) }
+  await load()
+}
 const selectedAddress = computed(() => addresses.value.find((a) => a.id === selectedAddressId.value) || null)
 function addressLabel() {
   const a = selectedAddress.value
@@ -233,7 +238,11 @@ function fmt(n) { return Number(n).toFixed(2) }
         <span class="tier-summary">{{ tierSummary }}</span>
         <span v-if="nextTier" class="tier-next">再买<b>¥{{ nextTier.diff }}</b>减¥{{ nextTier.discount }}</span>
       </div>
-      <van-submit-bar :price="finalTotal * 100" :button-text="'结算 (' + selectedCount + '件)'" @submit="checkout"><van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox></van-submit-bar>
+      <van-submit-bar :price="finalTotal * 100" :button-text="'结算 (' + selectedCount + '件)'" @submit="checkout">
+        <van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox>
+        <span class="invert-btn" @click="invertSelection">反选</span>
+        <span class="selected-count">已选{{ selectedCount }}件</span>
+      </van-submit-bar>
 
       <van-popup v-model:show="showCouponPicker" position="bottom" round>
         <div class="coupon-picker">
@@ -295,6 +304,8 @@ function fmt(n) { return Number(n).toFixed(2) }
 <style scoped>
 .cart-page { padding-bottom: 60px; }
 .loading { text-align: center; padding: 80px; }
+.invert-btn { font-size: 14px; color: #ff0036; margin-left: 12px; cursor: pointer; }
+.selected-count { font-size: 12px; color: #969799; margin-left: 12px; }
 .cart-item { display: flex; align-items: center; gap: 10px; padding: 12px; background: #fff; border-bottom: 1px solid #f5f5f5; }
 .ci-info { flex: 1; }
 .ci-name { font-size: 13px; line-height: 18px; height: 36px; }
