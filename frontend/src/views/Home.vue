@@ -66,6 +66,24 @@ function isNew(p) {
   if (isNaN(created.getTime())) return false
   return (Date.now() - created.getTime()) <= 7 * 24 * 3600 * 1000
 }
+
+// ---- 热门标签 (hot tags discovery feed) ----
+// Clickable chips that route to /search?q=<tag>. Five rotating gradient
+// colors cycle across the chips for a colorful, festive look.
+const hotTags = ['新品上市', '限时特惠', '品质好物', '夏日必备', '居家优选', '数码达人', '美妆护肤', '食品生鲜']
+const tagColors = [
+  'linear-gradient(135deg, #ff0036, #ff5a5f)', // red
+  'linear-gradient(135deg, #ff7a18, #ffb347)', // orange
+  'linear-gradient(135deg, #5b8def, #7ec8ff)', // blue
+  'linear-gradient(135deg, #00c9a7, #4cd9b5)', // green
+  'linear-gradient(135deg, #a06bff, #c89bff)', // purple
+]
+function tagStyle(i) {
+  return { background: tagColors[i % tagColors.length] }
+}
+function searchTag(tag) {
+  router.push({ name: 'search', query: { q: tag } })
+}
 </script>
 
 <template>
@@ -111,6 +129,23 @@ function isNew(p) {
           <div class="brand-name van-ellipsis">{{ b.name.replace('官方旗舰店', '') }}</div>
           <div class="brand-fans">{{ (b.followers / 10000).toFixed(0) }}万粉丝</div>
         </div>
+      </div>
+    </div>
+
+    <!-- 热门标签 (hot tags discovery feed) -->
+    <div class="tag-section">
+      <div class="tag-head">
+        <span class="tag-title">🔥 热门标签</span>
+        <span class="tag-sub">发现好物 一键直达</span>
+      </div>
+      <div class="tag-chips">
+        <span
+          v-for="(t, i) in hotTags"
+          :key="t"
+          class="tag-chip"
+          :style="tagStyle(i)"
+          @click="searchTag(t)"
+        >{{ t }}</span>
       </div>
     </div>
 
@@ -172,4 +207,28 @@ function isNew(p) {
 .p-bottom .price { font-size: 16px; }
 .sales { font-size: 11px; color: #999; }
 .loading { text-align: center; padding: 20px; }
+
+/* 热门标签 (hot tags discovery feed) */
+.tag-section {
+  margin: 0 8px 8px;
+  border-radius: 8px;
+  padding: 14px 12px 16px;
+  background: linear-gradient(135deg, #fff0f3 0%, #fff6e6 50%, #f0f6ff 100%);
+}
+.tag-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.tag-title { font-size: 16px; font-weight: bold; color: #ff0036; }
+.tag-sub { font-size: 11px; color: #999; }
+.tag-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.tag-chip {
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+  padding: 7px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+}
+.tag-chip:active { transform: scale(0.94); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); }
 </style>

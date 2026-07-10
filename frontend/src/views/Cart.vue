@@ -28,6 +28,50 @@ const invoiceTaxNo = ref('')
 const invoiceEmail = ref('')
 // Tiered discounts (阶梯满减) — store-wide promotion tiers.
 const tiers = ref([])
+// Group buy invite (好友拼单邀请) — social shopping invite popup.
+const showGroupBuy = ref(false)
+// Demo counter of how many friends have been "invited" (persisted in
+// localStorage across sessions).
+const GROUP_KEY = 'tm_groupbuy_invited'
+const invitedCount = ref(Number(localStorage.getItem(GROUP_KEY) || 0))
+// Generated invite text: item count + total + a fake join link.
+const inviteText = computed(() =>
+  `🎉 我正在天猫发起拼单，${selectedCount.value}件好物合计¥${fmt(selectedTotal.value)}，快来一起拼单享优惠！\n👉 点击加入拼单：https://tmall.example.com/group?c=${selectedCount.value}&t=${Date.now()}`
+)
+function openGroupBuy() {
+  if (!items.value.length) { showToast('购物车是空的'); return }
+  showGroupBuy.value = true
+}
+async function copyInvite() {
+  try {
+    await navigator.clipboard.writeText(inviteText.value)
+    showSuccessToast('邀请已复制')
+  } catch (e) {
+    // Clipboard API may be unavailable (HTTP, older browsers): fall back to a
+    // transient selection-based copy via a hidden textarea.
+    const ta = document.createElement('textarea')
+    ta.value = inviteText.value
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try { document.execCommand('copy'); showSuccessToast('邀请已复制') } catch (_) { showToast('复制失败，请手动复制') }
+    document.body.removeChild(ta)
+  }
+}
+async function shareInvite() {
+  if (navigator.share) {
+    try { await navigator.share({ title: '好友拼单邀请', text: inviteText.value }) } catch (e) {}
+  } else {
+    await copyInvite()
+    showToast('当前环境不支持系统分享，已为你复制邀请')
+  }
+}
+function addInvitee() {
+  invitedCount.value += 1
+  localStorage.setItem(GROUP_KEY, String(invitedCount.value))
+  showToast(`已邀请${invitedCount.value}人`)
+}
 
 const usableCoupons = computed(() =>
   (coupons.value || []).filter((c) => c.is_used === 0 && (!c.coupon || selectedTotal.value >= c.coupon.threshold))
@@ -241,6 +285,7 @@ function fmt(n) { return Number(n).toFixed(2) }
       <van-submit-bar :price="finalTotal * 100" :button-text="'结算 (' + selectedCount + '件)'" @submit="checkout">
         <van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox>
         <span class="invert-btn" @click="invertSelection">反选</span>
+        <span class="group-btn" @click="openGroupBuy">👥 邀请拼单</span>
         <span class="selected-count">已选{{ selectedCount }}件</span>
       </van-submit-bar>
 
@@ -295,6 +340,27 @@ function fmt(n) { return Number(n).toFixed(2) }
             <van-button block @click="closeInvoiceForm">取消</van-button>
             <van-button block type="danger" @click="saveInvoice">确定</van-button>
           </div>
+        </div>
+      </van-popup>
+
+      <!-- Group buy invite popup (好友拼单邀请) -->
+      <van-popup v-model:show="showGroupBuy" round closeable close-icon-position="top-right" :style="{ width: '86%', maxHeight: '85%' }">
+        <div class="gb-popup">
+          <div class="gb-hero">
+            <div class="gb-title">邀请好友一起拼单</div>
+            <div class="gb-sub">🎉 拼着买 更划算</div>
+          </div>
+          <div class="gb-counter">已邀请 <b>{{ invitedCount }}</b> 人</div>
+          <div class="gb-card">
+            <div class="gb-card-line">🛒 {{ selectedCount }} 件好物</div>
+            <div class="gb-card-line">💰 合计 ¥{{ fmt(selectedTotal) }}</div>
+          </div>
+          <div class="gb-invite-text">{{ inviteText }}</div>
+          <div class="gb-actions">
+            <van-button block round type="danger" @click="copyInvite">复制邀请</van-button>
+            <van-button block round plain type="danger" @click="shareInvite">系统分享</van-button>
+          </div>
+          <div class="gb-demo" @click="addInvitee">+ 模拟一位好友加入拼单</div>
         </div>
       </van-popup>
     </div>

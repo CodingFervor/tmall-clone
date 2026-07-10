@@ -1,10 +1,11 @@
 <script setup>
 import { ref, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { showToast } from 'vant'
 import { ftsSearch, ftsSuggest } from '../api'
 
 const router = useRouter()
+const route = useRoute()
 const keyword = ref('')
 const results = ref([])
 const suggestions = ref([])
@@ -16,6 +17,12 @@ const focused = ref(false)
 const HISTORY_KEY = 'tm_search_history'
 const history = ref(JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'))
 const hotList = ['小棕瓶', 'SK-II', 'iPhone', 'Nike', '奶粉']
+
+// Auto-run a search when navigated with a ?q= query param (e.g. from the
+// Home hot-tags discovery feed).
+if (route.query.q) {
+  doSearch(String(route.query.q))
+}
 
 // ---- debounced real-time suggestions (300ms) ----
 let suggestTimer = null
