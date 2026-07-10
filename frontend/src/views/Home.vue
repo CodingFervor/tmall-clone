@@ -9,6 +9,13 @@ const products = ref([])
 const brands = ref([])
 const categories = ref([])
 const loading = ref(false)
+// Tracks whether real content has loaded so it can fade in over the skeleton.
+const contentReady = ref(false)
+// Fixed skeleton placeholders rendered while loading.
+const skeletonProducts = [0, 1, 2]
+const skeletonSeckill = [0, 1, 2, 3]
+// Ripple feedback for category icons: holds the key being pressed.
+const rippleCat = ref(null)
 
 // ---- 限时抢购倒计时 (flash sale countdown to next top-of-hour) ----
 const countdown = ref('00:00:00')
@@ -49,6 +56,8 @@ onMounted(async () => {
     showToast('加载失败')
   } finally {
     loading.value = false
+    // Trigger fade-in of real content on the next frame, after the skeleton is removed.
+    requestAnimationFrame(() => { requestAnimationFrame(() => { contentReady.value = true }) })
   }
   tick()
   timer = setInterval(tick, 1000)
@@ -66,6 +75,20 @@ function isNew(p) {
   if (isNaN(created.getTime())) return false
   return (Date.now() - created.getTime()) <= 7 * 24 * 3600 * 1000
 }
+
+// ---- 分类图标美化 (category icon gradients + ripple) ----
+// Each category icon gets a soft circular gradient backdrop. A pool of
+// festive red/orange/purple tones matching the Tmall brand is cycled.
+const catGradients = [
+  'linear-gradient(135deg, #ff0036, #ff5a5f)',
+  'linear-gradient(135deg, #ff7a18, #ffb347)',
+  'linear-gradient(135deg, #a06bff, #c89bff)',
+  'linear-gradient(135deg, #ff4d8d, #ff9a9e)',
+  'linear-gradient(135deg, #ff9800, #ffc46b)',
+]
+function catStyle(i) { return { background: catGradients[i % catGradients.length] } }
+function onCatTouchStart(c) { rippleCat.value = (c && c.id != null) ? c.id : 'all' }
+function onCatTouchEnd() { rippleCat.value = null }
 
 // ---- 热门标签 (hot tags discovery feed) ----
 // Clickable chips that route to /search?q=<tag>. Five rotating gradient
@@ -100,9 +123,33 @@ function searchTag(tag) {
     </div>
 
     <div class="cat-grid">
-      <div v-for="c in categories" :key="c.id" class="cat-item" @click="router.push({ name: 'category', query: { id: c.id } })">
-        <div class="cat-icon">{{ c.icon }}</div>
+      <div
+        v-for="(c, i) in categories"
+        :key="c.id"
+        class="cat-item"
+        :class="{ rippling: rippleCat === c.id }"
+        @click="router.push({ name: 'category', query: { id: c.id } })"
+        @touchstart.passive="onCatTouchStart(c)"
+        @touchend.passive="onCatTouchEnd"
+        @mousedown="onCatTouchStart(c)"
+        @mouseup="onCatTouchEnd"
+        @mouseleave="onCatTouchEnd"
+      >
+        <div class="cat-icon" :style="catStyle(i)">{{ c.icon }}</div>
         <div class="cat-name">{{ c.name }}</div>
+      </div>
+      <div
+        class="cat-item"
+        :class="{ rippling: rippleCat === 'all' }"
+        @click="router.push({ name: 'category' })"
+        @touchstart.passive="onCatTouchStart({ id: 'all' })"
+        @touchend.passive="onCatTouchEnd"
+        @mousedown="onCatTouchStart({ id: 'all' })"
+        @mouseup="onCatTouchEnd"
+        @mouseleave="onCatTouchEnd"
+      >
+        <div class="cat-icon cat-all">»</div>
+        <div class="cat-name">全部</div>
       </div>
     </div>
 
@@ -113,7 +160,13 @@ function searchTag(tag) {
     </div>
 
     <!-- 限时秒杀入口 -->
-    <div class="seckill-entry" @click="router.push('/seckill')">
+    <div v-if="loading" class="seckill-entry skeleton-seckill">
+      <div v-for="i in skeletonSeckill" :key="'sk' + i" class="sk-sk-item">
+        <div class="sk-circle shimmer"></div>
+        <div class="sk-line sk-line-s shimmer"></div>
+      </div>
+    </div>
+    <div v-else class="seckill-entry" :class="{ 'fade-in': contentReady }" @click="router.push('/seckill')">
       <span class="se-icon">⚡</span>
       <span class="se-title">限时秒杀</span>
       <span class="se-sub">5折抢购 · 先到先得</span>
@@ -151,7 +204,20 @@ function searchTag(tag) {
 
     <div class="section">
       <div class="section-head"><span>为你推荐</span></div>
-      <div class="product-grid">
+      <!-- Skeleton product cards while loading (骨架屏) -->
+      <div v-if="loading" class="product-grid">
+        <div v-for="i in skeletonProducts" :key="'sp' + i" class="product-card sk-product-card">
+          <div class="sk-img shimmer"></div>
+          <div class="sk-line sk-line-l shimmer"></div>
+          <div class="sk-line sk-line-m shimmer"></div>
+          <div class="sk-bottom">
+            <div class="sk-line sk-price shimmer"></div>
+            <div class="sk-line sk-sales shimmer"></div>
+          </div>
+        </div>
+      </div>
+      <!-- Real content fades in once loaded -->
+      <div v-else class="product-grid" :class="{ 'fade-in': contentReady }">
         <div v-for="p in products" :key="p.id" class="product-card" @click="router.push('/product/' + p.id)">
           <div class="new-badge" v-if="isNew(p)">NEW</div>
           <van-image width="100%" height="170" :src="p.image" fit="cover" radius="6" />
@@ -165,7 +231,6 @@ function searchTag(tag) {
         </div>
       </div>
     </div>
-    <div v-if="loading" class="loading"><van-loading /></div>
   </div>
 </template>
 
@@ -185,10 +250,25 @@ function searchTag(tag) {
 .se-title { font-size: 16px; font-weight: bold; }
 .se-sub { font-size: 12px; opacity: 0.9; flex: 1; }
 .se-go { font-size: 13px; }
-.cat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px 0; padding: 16px 8px; background: #fff; margin: 0 8px 8px; border-radius: 8px; }
-.cat-item { text-align: center; }
-.cat-icon { font-size: 28px; }
-.cat-name { font-size: 12px; color: #666; margin-top: 4px; }
+.cat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px 0; padding: 16px 8px; background: #fff; margin: 0 8px 8px; border-radius: 8px; }
+.cat-item { text-align: center; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.cat-item .cat-icon {
+  font-size: 24px;
+  width: 48px; height: 48px;
+  margin: 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  border-radius: 50%;
+  box-shadow: 0 3px 8px rgba(255, 0, 54, 0.18);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.cat-item .cat-all { background: linear-gradient(135deg, #888, #bbb); font-weight: bold; font-size: 22px; letter-spacing: -2px; }
+.cat-item.rippling .cat-icon { transform: scale(0.88); box-shadow: 0 1px 3px rgba(255, 0, 54, 0.25); }
+.cat-item.rippling::after {
+  content: '';
+  position: absolute;
+}
+.cat-name { font-size: 12px; color: #666; margin-top: 6px; }
 .section { background: #fff; margin: 0 8px 8px; border-radius: 8px; padding: 12px; }
 .section-head { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: bold; margin-bottom: 10px; }
 .more { font-size: 12px; color: #999; font-weight: normal; }
@@ -207,6 +287,37 @@ function searchTag(tag) {
 .p-bottom .price { font-size: 16px; }
 .sales { font-size: 11px; color: #999; }
 .loading { text-align: center; padding: 20px; }
+
+/* ---- 骨架屏 + 渐入动画 (skeleton shimmer + fade-in) ---- */
+.shimmer {
+  background: linear-gradient(90deg, #ececec 25%, #f5f5f5 37%, #ececec 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+/* Skeleton product card */
+.sk-product-card { padding: 0 0 8px; }
+.sk-img { width: 100%; height: 170px; border-radius: 6px 6px 0 0; }
+.sk-line { height: 12px; border-radius: 4px; margin: 8px 6px; }
+.sk-line-l { height: 16px; }
+.sk-line-m { width: 60%; }
+.sk-bottom { display: flex; align-items: center; justify-content: space-between; padding: 0 6px; margin-top: 4px; }
+.sk-price { width: 40%; height: 18px; }
+.sk-sales { width: 30%; height: 12px; }
+/* Skeleton seckill row */
+.skeleton-seckill { display: flex; gap: 10px; justify-content: space-between; padding: 14px 16px; background: #f2f2f2 !important; cursor: default; }
+.sk-sk-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.sk-circle { width: 48px; height: 48px; border-radius: 50%; }
+.skeleton-seckill .sk-line-s { width: 80%; margin: 0; height: 10px; }
+/* Fade-in real content */
+.fade-in { animation: fadeInUp 0.45s ease both; }
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 /* 热门标签 (hot tags discovery feed) */
 .tag-section {

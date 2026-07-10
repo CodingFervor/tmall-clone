@@ -70,20 +70,56 @@ async function submit() {
     await tryShowWelcome()
   } catch (e) { showToast(e.response?.data?.error || '操作失败') }
 }
+
+// ---- 第三方登录 & 忘记密码 (social login + forgot password, visual only) ----
+function socialLogin(provider) {
+  const names = { wechat: '微信', alipay: '支付宝', qq: 'QQ' }
+  showToast(`${names[provider] || '第三方'}登录暂未开通`)
+}
+function forgotPassword() {
+  showToast('请联系客服重置密码')
+}
 </script>
 
 <template>
   <div class="login-page">
-    <van-nav-bar left-arrow @click-left="router.back()" />
-    <div class="logo-area"><div class="tm-logo">天猫</div><p class="welcome">{{ mode === 'login' ? '欢迎登录天猫' : '注册天猫账号' }}</p></div>
-    <div class="form">
+    <!-- Gradient brand banner with wordmark -->
+    <div class="brand-banner">
+      <span class="back-btn" @click="router.back()">‹</span>
+      <div class="bb-wordmark">天猫</div>
+      <p class="bb-welcome">{{ mode === 'login' ? '欢迎回来👋' : '加入天猫👋' }}</p>
+      <p class="bb-sub">{{ mode === 'login' ? '理想生活上天猫' : '开启理想生活' }}</p>
+      <div class="bb-bubble bb-bubble-1"></div>
+      <div class="bb-bubble bb-bubble-2"></div>
+    </div>
+
+    <!-- Slide-up form card -->
+    <div class="form-card slide-up">
+      <div class="form-title">{{ mode === 'login' ? '账号登录' : '注册账号' }}</div>
       <van-cell-group inset>
         <van-field v-model="username" label="用户名" placeholder="请输入用户名" clearable />
         <van-field v-model="password" type="password" label="密码" placeholder="请输入密码" clearable />
         <van-field v-if="mode === 'register'" v-model="nickname" label="昵称" placeholder="选填" clearable />
       </van-cell-group>
+      <div class="forgot-row" v-if="mode === 'login'"><span class="forgot-link" @click="forgotPassword">忘记密码</span></div>
       <div style="margin: 16px"><van-button type="danger" block round @click="submit">{{ mode === 'login' ? '登 录' : '注 册' }}</van-button></div>
       <div class="switch" @click="mode = mode === 'login' ? 'register' : 'login'">{{ mode === 'login' ? '没有账号？去注册' : '已有账号？去登录' }}</div>
+
+      <!-- Social login (visual only, toast on click) -->
+      <div class="social">
+        <div class="social-divider"><span>其他登录方式</span></div>
+        <div class="social-btns">
+          <div class="social-btn sb-wechat" @click="socialLogin('wechat')">
+            <span class="sb-icon">💬</span><span class="sb-label">微信</span>
+          </div>
+          <div class="social-btn sb-alipay" @click="socialLogin('alipay')">
+            <span class="sb-icon">💰</span><span class="sb-label">支付宝</span>
+          </div>
+          <div class="social-btn sb-qq" @click="socialLogin('qq')">
+            <span class="sb-icon">🐧</span><span class="sb-label">QQ</span>
+          </div>
+        </div>
+      </div>
       <div class="hint">演示账号: admin / admin123</div>
     </div>
 
@@ -114,11 +150,80 @@ async function submit() {
 
 <style scoped>
 .login-page { min-height: 100vh; background: #fff; }
-.logo-area { text-align: center; padding: 30px 0 20px; }
-.tm-logo { display: inline-block; background: #ff0036; color: #fff; font-size: 28px; font-weight: bold; width: 80px; height: 80px; line-height: 80px; border-radius: 12px; }
-.welcome { margin-top: 14px; font-size: 18px; color: #333; }
+/* Gradient brand banner with wordmark */
+.brand-banner {
+  position: relative;
+  padding: 50px 24px 60px;
+  background: linear-gradient(135deg, #ff0036 0%, #ff4d6d 55%, #ff7a18 100%);
+  color: #fff;
+  overflow: hidden;
+  border-bottom-left-radius: 28px;
+  border-bottom-right-radius: 28px;
+}
+.back-btn {
+  position: absolute; top: 16px; left: 14px;
+  color: #fff; font-size: 30px; line-height: 1; cursor: pointer;
+  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+}
+.bb-wordmark {
+  font-size: 40px; font-weight: 900; letter-spacing: 4px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+.bb-welcome { margin-top: 14px; font-size: 22px; font-weight: bold; }
+.bb-sub { margin-top: 6px; font-size: 14px; opacity: 0.9; }
+/* Decorative translucent bubbles */
+.bb-bubble { position: absolute; border-radius: 50%; background: rgba(255, 255, 255, 0.16); }
+.bb-bubble-1 { width: 120px; height: 120px; top: -30px; right: -20px; }
+.bb-bubble-2 { width: 70px; height: 70px; bottom: -20px; right: 60px; background: rgba(255, 255, 255, 0.12); }
+
+/* Slide-up form card */
+.form-card {
+  position: relative;
+  margin: -32px 12px 0;
+  background: #fff;
+  border-radius: 18px;
+  padding: 22px 4px 16px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+  z-index: 2;
+}
+.slide-up { animation: slideUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(36px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.form-title { font-size: 18px; font-weight: bold; color: #333; padding: 0 20px 14px; }
+.forgot-row { display: flex; justify-content: flex-end; padding: 6px 28px 0; }
+.forgot-link { font-size: 13px; color: #999; cursor: pointer; }
+.forgot-link:active { color: #ff0036; }
 .switch { text-align: center; color: #ff0036; font-size: 14px; }
-.hint { text-align: center; color: #999; font-size: 12px; margin-top: 16px; }
+.hint { text-align: center; color: #999; font-size: 12px; margin-top: 18px; }
+
+/* Social login buttons */
+.social { margin-top: 24px; }
+.social-divider {
+  display: flex; align-items: center; justify-content: center;
+  color: #bbb; font-size: 12px; margin-bottom: 18px;
+}
+.social-divider::before, .social-divider::after {
+  content: ''; flex: 0 0 60px; height: 1px; background: #eee; margin: 0 12px;
+}
+.social-btns { display: flex; justify-content: center; gap: 34px; }
+.social-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s ease;
+}
+.social-btn:active { transform: scale(0.9); }
+.sb-icon {
+  width: 48px; height: 48px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; color: #fff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+}
+.sb-wechat .sb-icon { background: linear-gradient(135deg, #07c160, #2ecc71); }
+.sb-alipay .sb-icon { background: linear-gradient(135deg, #1677ff, #4d9bff); }
+.sb-qq .sb-icon { background: linear-gradient(135deg, #12b7f5, #3ecbff); }
+.sb-label { font-size: 12px; color: #666; }
 /* New user welcome pack popup (新人专享礼包) */
 .welcome-pack { padding: 36px 20px 24px; }
 .wp-header { text-align: center; margin-bottom: 18px; }

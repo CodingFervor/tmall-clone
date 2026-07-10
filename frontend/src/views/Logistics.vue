@@ -34,6 +34,30 @@ function mapProgress() {
 }
 const routePoints = [{ name: '仓库', pos: 5 }, { name: '中转站', pos: 38 }, { name: '派送中', pos: 72 }, { name: '已签收', pos: 95 }]
 function activePoint() { const p = mapProgress(); return routePoints.filter((rp) => rp.pos <= p).length - 1 }
+
+// ---- 快递员信息 (delivery courier card) ----
+// A random courier is generated once per order (seeded by order id) so the
+// data is stable across reloads of the same order.
+const courierNames = ['李建国', '王伟', '张磊', '刘洋', '陈志强', '赵鹏', '孙明', '周国栋', '吴军', '徐涛', '马超', '黄海']
+function seedRand(seed) {
+  let h = 2166136261 >>> 0
+  const s = String(seed)
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0 }
+  return () => { h = (Math.imul(h, 1664525) + 1013904223) >>> 0; return h / 4294967296 }
+}
+function buildCourier() {
+  const rnd = seedRand(orderId.value || 1)
+  const name = courierNames[Math.floor(rnd() * courierNames.length)]
+  // Fake phone: 1 + a 2-digit segment starting with 3/5/7/8/9 + 8 digits.
+  const secondDigits = ['3', '5', '7', '8', '9']
+  let phone = '1' + secondDigits[Math.floor(rnd() * secondDigits.length)]
+  for (let i = 0; i < 9; i++) phone += Math.floor(rnd() * 10)
+  const phoneMasked = phone.slice(0, 3) + '****' + phone.slice(7)
+  return { name, phone, phoneMasked, rating: '4.8' }
+}
+const courier = ref(buildCourier())
+function showCourier(s) { return s === 'shipped' || s === 'in_transit' }
+function contactCourier() { showToast(`正在呼叫 ${courier.value.name}（${courier.value.phoneMasked}）`) }
 </script>
 
 <template>
@@ -45,6 +69,18 @@ function activePoint() { const p = mapProgress(); return routePoints.filter((rp)
         <div class="carrier">{{ shipment.carrier }}</div>
         <div class="track-no">运单号: {{ shipment.tracking_no }}</div>
         <van-tag :type="shipment.status === 'delivered' ? 'success' : 'primary'" size="large">{{ statusText(shipment.status) }}</van-tag>
+      </div>
+      <!-- 快递员信息 (courier card) - only when shipped / in_transit -->
+      <div v-if="showCourier(shipment.status)" class="courier-card">
+        <div class="courier-avatar">🛵</div>
+        <div class="courier-info">
+          <div class="courier-name">{{ courier.name }} <span class="courier-tag">专属快递员</span></div>
+          <div class="courier-meta">
+            <span class="courier-phone">📞 {{ courier.phoneMasked }}</span>
+            <span class="courier-rating">⭐ {{ courier.rating }}分</span>
+          </div>
+        </div>
+        <van-button type="danger" size="small" round class="courier-btn" @click="contactCourier">联系快递员</van-button>
       </div>
       <div class="track-list">
         <div v-for="(t, i) in shipment.tracks" :key="t.id" class="track-item" :class="{ first: i === 0 }">
@@ -81,6 +117,29 @@ function activePoint() { const p = mapProgress(); return routePoints.filter((rp)
 .logi-page { min-height: 100vh; background: #f5f5f5; }
 .loading { text-align: center; padding: 80px; }
 .ship-head { background: #fff; padding: 20px; text-align: center; margin-bottom: 10px; }
+/* 快递员信息 (courier card) */
+.courier-card {
+  display: flex; align-items: center; gap: 12px;
+  background: #fff; margin: 0 10px 10px; border-radius: 8px; padding: 14px 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+.courier-avatar {
+  width: 48px; height: 48px; flex-shrink: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff0036, #ff7a18);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; box-shadow: 0 2px 6px rgba(255, 0, 54, 0.2);
+}
+.courier-info { flex: 1; min-width: 0; }
+.courier-name { font-size: 15px; font-weight: bold; color: #333; }
+.courier-tag {
+  font-size: 10px; font-weight: normal; color: #ff0036;
+  border: 1px solid #ffd6dd; background: #fff5f6;
+  padding: 0 5px; border-radius: 3px; margin-left: 4px;
+}
+.courier-meta { display: flex; gap: 14px; margin-top: 6px; font-size: 12px; color: #666; }
+.courier-rating { color: #ff9800; }
+.courier-btn { flex-shrink: 0; }
 .carrier { font-size: 16px; font-weight: bold; color: #333; }
 .track-no { color: #999; font-size: 13px; margin: 6px 0 10px; }
 .track-list { background: #fff; padding: 16px; margin: 0 10px; border-radius: 8px; }
