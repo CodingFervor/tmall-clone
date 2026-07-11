@@ -165,6 +165,8 @@ onMounted(async () => {
     loading.value = false
     // Wire up the scroll-spy observer for the detail tabs now that the DOM exists.
     nextTick(() => {
+      // Attach the auto-play observer for the intro video, if present.
+      setupVideoObserver()
       const sectionEls = ['product', 'reviews', 'qa', 'recommend']
         .map((k) => tabRefs[k].value)
         .filter(Boolean)
@@ -459,6 +461,61 @@ const activeTab = ref('product')
 const tabRefs = { product: ref(null), reviews: ref(null), qa: ref(null), recommend: ref(null) }
 const tabsBar = ref(null)
 let tabObserver = null
+
+// ---- 视频自动播放 (product video auto-play) ----
+// Watch the intro video with an IntersectionObserver: when ≥50% of it is in the
+// viewport it muted-plays automatically; scrolling away pauses it. The video
+// stays muted until the user taps the "🔇点击取消静音" overlay, after which the
+// overlay is hidden. Tapping the video body toggles play/pause.
+const productVideoRef = ref(null)
+let videoObserver = null
+const videoMuted = ref(true)
+const videoPlaying = ref(false)
+// We remove the native controls so our overlay + tap-to-toggle drive playback.
+function onVideoLoaded() {
+  const v = productVideoRef.value
+  if (!v) return
+  v.muted = true
+}
+function onVideoPlaying() { videoPlaying.value = true }
+function onVideoPause() { videoPlaying.value = false }
+function toggleVideoPlay() {
+  const v = productVideoRef.value
+  if (!v) return
+  if (v.paused) { v.play().catch(() => {}) }
+  else { v.pause() }
+}
+function unmuteVideo() {
+  const v = productVideoRef.value
+  if (!v) return
+  v.muted = false
+  videoMuted.value = false
+  // If it was paused (e.g. by a browser policy when leaving the viewport),
+  // resume now that the user has engaged.
+  if (v.paused) v.play().catch(() => {})
+}
+// (Re)attach the IntersectionObserver once the video element exists.
+function setupVideoObserver() {
+  const v = productVideoRef.value
+  if (!v || videoObserver) return
+  videoObserver = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          // IntersectionObserver supports a threshold array, but some browsers
+          // report fractional ratios; treat >=0.5 visibility as "in view".
+          if (e.intersectionRatio >= 0.5) {
+            v.play().catch(() => { /* autoplay can be blocked; ignore */ })
+          } else {
+            v.pause()
+          }
+        }
+      }
+    },
+    { threshold: [0, 0.5, 1] }
+  )
+  videoObserver.observe(v)
+}
 function scrollToTab(key) {
   const el = tabRefs[key] && tabRefs[key].value
   if (!el) return
@@ -471,6 +528,7 @@ function scrollToTab(key) {
 }
 onUnmounted(() => {
   if (tabObserver) { tabObserver.disconnect(); tabObserver = null }
+  if (videoObserver) { videoObserver.disconnect(); videoObserver = null }
 })
 </script>
 
@@ -478,8 +536,25 @@ onUnmounted(() => {
   <div v-if="loading" class="loading"><van-loading /></div>
   <div v-else-if="product" class="detail">
     <van-nav-bar title="商品详情" left-arrow @click-left="router.back()" fixed placeholder />
-    <!-- Product intro video (商品视频介绍) -->
-    <div v-if="product.video_url" class="product-video"><video :src="product.video_url" controls preload="metadata" class="pv-player"></video></div>
+    <!-- Product intro video (商品视频介绍) — auto-plays (muted) when ≥50% in view -->
+    <div v-if="product.video_url" class="product-video">
+      <video
+        ref="productVideoRef"
+        :src="product.video_url"
+        preload="metadata"
+        playsinline
+        muted
+        class="pv-player"
+        @loadeddata="onVideoLoaded"
+        @playing="onVideoPlaying"
+        @pause="onVideoPause"
+        @click="toggleVideoPlay"
+      ></video>
+      <!-- "🔇点击取消静音" overlay: shown while muted; tapping unmutes. -->
+      <div v-if="videoMuted" class="pv-unmute" @click.stop="unmuteVideo">🔇 点击取消静音</div>
+      <!-- Play/pause indicator (briefly shows when paused by the user) -->
+      <div v-if="!videoPlaying" class="pv-paused-badge" @click.stop="toggleVideoPlay">▶</div>
+    </div>
     <van-swipe class="gallery" :autoplay="3000" indicator-color="#ff0036" v-if="gallery.length > 1">
       <van-swipe-item v-for="(img, i) in gallery" :key="i">
         <van-image width="100%" height="375" :src="img" fit="cover" />
@@ -787,8 +862,11 @@ onUnmounted(() => {
 <style scoped>
 .detail { padding-bottom: 60px; }
 .loading { text-align: center; padding: 80px; }
-.product-video { background: #000; width: 100%; }
+.product-video { position: relative; background: #000; width: 100%; }
 .pv-player { width: 100%; max-height: 280px; object-fit: contain; display: block; }
+/* 视频自动播放 (product video auto-play) overlays */
+.pv-unmute { position: absolute; right: 12px; bottom: 12px; background: rgba(0,0,0,0.6); color: #fff; font-size: 12px; padding: 5px 12px; border-radius: 14px; cursor: pointer; user-select: none; backdrop-filter: blur(2px); }
+.pv-paused-badge { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 56px; height: 56px; border-radius: 50%; background: rgba(255,0,54,0.85); color: #fff; font-size: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.4); }
 .price-block { padding: 12px 16px; background: #fff; }
 .vip-price { margin-left: 12px; color: #333; font-size: 13px; background: linear-gradient(90deg, #ffd700, #ffaa00); padding: 2px 10px; border-radius: 12px; }
 .qa-section { background: #fff; margin-top: 8px; padding: 12px 16px; }

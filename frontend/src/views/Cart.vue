@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onActivated, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showConfirmDialog, showDialog } from 'vant'
-import { getCart, updateCart, deleteCart, createOrder, getMyCoupons, getAddresses, requestInvoice, getTieredDiscounts, getProducts, addToCart, toggleFavorite } from '../api'
+import { getCart, updateCart, deleteCart, createOrder, getMyCoupons, getAddresses, requestInvoice, getTieredDiscounts, getProducts, addToCart, toggleFavorite, getCheckInStatus } from '../api'
 
 const router = useRouter()
 const items = ref([])
@@ -135,6 +135,198 @@ async function quickTopup(p) {
   try { await addToCart(p.id, 1); await load(); showSuccessToast('已加入购物车 凑单成功') }
   catch (e) { showToast(e.response?.data?.error || '加入失败') }
 }
+// ---- 搭配购买 (cart companion suggestions) ----
+// "买了A的人还买了": for each cart item we surface one related product from the
+// recommendation pool. The pairing is deterministic (a stable hash of the item's
+// product_id picks an index into the pool) so a given item always maps to the
+// same companion, and we skip the item itself. We show at most one companion per
+// item and dedupe companions already in the cart.
+function hashPick(seed) {
+  let h = (seed >>> 0) || 1
+  h = (h * 2654435761) >>> 0
+  return h
+}
+const companionSuggestions = computed(() => {
+  const pool = (recommendations.value || []).filter((p) => p.id)
+  if (!pool.length) return []
+  const inCartIds = new Set(items.value.map((i) => i.product_id))
+  const used = new Set()
+  const out = []
+  for (const it of items.value) {
+    // Deterministically pick a starting index for this item.
+    const base = hashPick(Number(it.product_id) || 0) % pool.length
+    let pick = null
+    for (let step = 0; step < pool.length; step++) {
+      const cand = pool[(base + step) % pool.length]
+      if (cand.id === it.product_id) continue
+      if (inCartIds.has(cand.id)) continue
+      if (used.has(cand.id)) continue
+      pick = cand
+      break
+    }
+    if (pick) {
+      used.add(pick.id)
+      out.push({ cartItem: it, product: pick })
+    }
+  }
+  return out
+})
+async function quickAddCompanion(p) {
+  try { await addToCart(p.id, 1); await load(); showSuccessToast('已加入购物车') }
+  catch (e) { showToast(e.response?.data?.error || '加入失败') }
+}
+// ---- 下单抽奖 (order lucky draw) ----
+// After a successful checkout a "🎁幸运抽奖" popup appears. It's a 3-column slot
+// machine: the columns scroll, then stop one-by-one left → right. The three
+// landed symbols decide the prize:
+//   - all 3 match → 88VIP折扣券
+//   - exactly 2 match → 10元券
+//   - otherwise → 谢谢参与
+// Winners trigger a confetti burst. The first draw is free; "再来一次" costs 50
+// 积分. Points are seeded from the check-in status (total_points) and tracked
+// locally for the session so replays can spend them.
+const SLOT_SYMBOLS = ['🍒', '🍋', '🔔', '⭐', '💎']
+const REPLAY_COST = 50
+const LUCKY_POINTS_KEY = 'tm_lucky_points'
+const showLuckyDraw = ref(false)
+const drawSpinning = ref(false)
+const drawResult = ref(null)         // { prize: '88VIP折扣券'|'10元券'|'谢谢参与', win: bool }
+const drawPoints = ref(0)
+// Per-column state: the landed symbol index (null while still spinning).
+const slotCols = ref([null, null, null])
+// Vertical offset (in symbol-height units) used to drive the scrolling animation.
+// Each column animates by translating its strip upward; the final offset places
+// the target symbol centered.
+const slotOffsets = ref([0, 0, 0])
+const slotReels = ref([[], [], []])  // each column's rendered symbol list
+let spinTimers = []
+
+function loadDrawPoints() {
+  // Prefer the server's total_points; fall back to a locally persisted value.
+  if (localStorage.getItem('tm_token')) {
+    getCheckInStatus().then((res) => {
+      drawPoints.value = Number(res.total_points) || 0
+      localStorage.setItem(LUCKY_POINTS_KEY, String(drawPoints.value))
+    }).catch(() => {
+      drawPoints.value = Number(localStorage.getItem(LUCKY_POINTS_KEY) || 0)
+    })
+  } else {
+    drawPoints.value = Number(localStorage.getItem(LUCKY_POINTS_KEY) || 0)
+  }
+}
+// Build a long repeating strip ending on the target symbol so the CSS
+// transition can scroll from top to that symbol.
+function buildReel(targetIdx, length) {
+  const reel = []
+  for (let i = 0; i < length; i++) {
+    reel.push((Math.floor(Math.random() * SLOT_SYMBOLS.length) + i) % SLOT_SYMBOLS.length)
+  }
+  // Force the final cell to the target so the landing is deterministic.
+  reel[length - 1] = targetIdx
+  return reel
+}
+// Pre-pick the three landed symbols with a light weighting so a 3-match is rare
+// but possible. Returns the indices of the three symbols.
+function pickLanding() {
+  const r = Math.random()
+  if (r < 0.12) {
+    // ~12%: all three match.
+    const s = Math.floor(Math.random() * SLOT_SYMBOLS.length)
+    return [s, s, s]
+  }
+  if (r < 0.45) {
+    // ~33%: exactly two match (cols 0&1, 0&2, or 1&2).
+    const s = Math.floor(Math.random() * SLOT_SYMBOLS.length)
+    const other = (s + 1 + Math.floor(Math.random() * (SLOT_SYMBOLS.length - 1))) % SLOT_SYMBOLS.length
+    const pairSlot = Math.floor(Math.random() * 3)
+    const res = [other, other, other]
+    res[pairSlot] = s
+    res[(pairSlot + 1) % 3] = s
+    return res
+  }
+  // otherwise: no matches (all distinct).
+  const shuffled = [...SLOT_SYMBOLS.keys()]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled.slice(0, 3)
+}
+function startDraw(isReplay) {
+  if (drawSpinning.value) return
+  if (isReplay) {
+    if (drawPoints.value < REPLAY_COST) { showToast('积分不足，需要' + REPLAY_COST + '积分'); return }
+    drawPoints.value -= REPLAY_COST
+    localStorage.setItem(LUCKY_POINTS_KEY, String(drawPoints.value))
+  }
+  drawSpinning.value = true
+  drawResult.value = null
+  const landing = pickLanding()
+  // Reset columns to spinning state.
+  for (let c = 0; c < 3; c++) {
+    slotCols.value[c] = null
+    const len = 20 + c * 4 // longer reels for outer columns -> they spin longer
+    slotReels.value[c] = buildReel(landing[c], len)
+    slotOffsets.value[c] = 0
+  }
+  // Stop the columns left → right with a stagger.
+  for (let c = 0; c < 3; c++) {
+    const stopDelay = 700 + c * 600
+    spinTimers.push(setTimeout(() => stopColumn(c), stopDelay))
+  }
+}
+function stopColumn(c) {
+  // Set the offset so the final symbol sits centered, then lock the column.
+  const reel = slotReels.value[c]
+  // The final symbol is the last cell; translate up by (len - 1) symbol heights.
+  slotOffsets.value[c] = reel.length - 1
+  slotCols.value[c] = reel[reel.length - 1]
+  // If this is the last column, resolve the result.
+  if (slotCols.value.every((v) => v !== null)) {
+    drawSpinning.value = false
+    resolveDraw()
+  }
+}
+function resolveDraw() {
+  const [a, b, c] = slotCols.value
+  let win = false
+  let prize = '谢谢参与'
+  if (a === b && b === c) { prize = '88VIP折扣券'; win = true }
+  else if (a === b || b === c || a === c) { prize = '10元券'; win = true }
+  drawResult.value = { prize, win }
+  if (win) {
+    showSuccessToast('恭喜中奖：' + prize)
+    burstConfetti()
+  } else {
+    showToast('谢谢参与')
+  }
+}
+function closeLuckyDraw() {
+  // Cancel any pending spin timers if the user closes mid-spin.
+  spinTimers.forEach((t) => clearTimeout(t))
+  spinTimers = []
+  drawSpinning.value = false
+  showLuckyDraw.value = false
+}
+// ---- Confetti (彩纸) for winners ----
+// A lightweight DOM-based confetti: spawn N colored chips that fall and fade,
+// then remove themselves. No external dependency.
+function burstConfetti() {
+  const host = document.getElementById('tm-confetti')
+  if (!host) return
+  const colors = ['#ff0036', '#ff8a00', '#ffc107', '#07c160', '#1989fa', '#7232dd']
+  for (let i = 0; i < 60; i++) {
+    const chip = document.createElement('div')
+    chip.className = 'tm-confetti-chip'
+    chip.style.left = Math.random() * 100 + '%'
+    chip.style.background = colors[i % colors.length]
+    chip.style.animationDelay = (Math.random() * 0.5) + 's'
+    chip.style.animationDuration = (1.6 + Math.random() * 1.4) + 's'
+    chip.style.transform = `rotate(${Math.random() * 360}deg)`
+    host.appendChild(chip)
+    setTimeout(() => chip.remove(), 3200)
+  }
+}
 // Whether a cart item has dropped in price (降价 tag) — original_price > price * 1.1.
 function isPriceDrop(item) {
   return item.original_price && item.original_price > item.price * 1.1
@@ -164,7 +356,7 @@ async function load() {
     }
   } catch (e) { if (e.response?.status === 401) router.replace('/login') } finally { loading.value = false }
 }
-onMounted(load); onActivated(load)
+onMounted(() => { load(); loadDrawPoints() }); onActivated(load)
 
 async function toggleSelect(item) {
   const ns = item.selected === 1 ? 0 : 1
@@ -380,11 +572,24 @@ async function runCheckoutAttempt() {
     clearCountdown()
     const order = await performCheckout()
     clearCountdown()
+    // Reload the cart (order consumed the selected items) and offer the lucky
+    // draw before navigating away.
+    await load()
     showSuccessToast('下单成功')
-    router.push('/orders')
+    openLuckyDraw()
   } catch (e) {
     handleCheckoutError(e)
   }
+}
+// Offer the post-order lucky draw. The first spin is free; we refresh points
+// first so the "再来一次" cost reflects the latest balance.
+function openLuckyDraw() {
+  loadDrawPoints()
+  drawResult.value = null
+  slotCols.value = [null, null, null]
+  slotOffsets.value = [0, 0, 0]
+  slotReels.value = [[], [], []]
+  showLuckyDraw.value = true
 }
 
 function handleCheckoutError(e) {
@@ -485,6 +690,26 @@ function fmt(n) { return Number(n).toFixed(2) }
           </div>
         </template>
       </van-swipe-cell>
+      <!-- 搭配购买 (cart companion suggestions): "买了A的人还买了" -->
+      <div v-if="companionSuggestions.length" class="companion-section">
+        <div class="comp-head">🛍 搭配购买</div>
+        <div v-for="(c, idx) in companionSuggestions" :key="idx" class="comp-item">
+          <div class="comp-anchor">
+            <van-image width="44" height="44" radius="6" :src="c.cartItem.product_image" fit="cover" />
+            <span class="comp-anchor-name van-ellipsis">{{ c.cartItem.product_name }}</span>
+          </div>
+          <div class="comp-arrow">→</div>
+          <div class="comp-pick" @click="router.push('/product/' + c.product.id)">
+            <van-image width="44" height="44" radius="6" :src="c.product.image" fit="cover" />
+            <div class="comp-pick-info">
+              <span class="comp-pick-name van-ellipsis">买了它的人还买了</span>
+              <span class="comp-pick-title van-ellipsis">{{ c.product.name }}</span>
+              <span class="comp-pick-price">¥{{ fmt(c.product.price) }}</span>
+            </div>
+            <van-button size="mini" type="danger" round @click.stop="quickAddCompanion(c.product)">加入</van-button>
+          </div>
+        </div>
+      </div>
       <!-- Coupon selector -->
       <van-cell
         title="优惠券"
@@ -643,6 +868,43 @@ function fmt(n) { return Number(n).toFixed(2) }
       </van-popup>
     </div>
 
+    <!-- 下单抽奖 (order lucky draw) popup -->
+    <van-popup v-model:show="showLuckyDraw" round closeable close-icon-position="top-right" :style="{ width: '88%' }" :close-on-click-overlay="false" @click-close-icon="closeLuckyDraw">
+      <div class="ld-popup">
+        <div class="ld-hero">
+          <div class="ld-title">🎁 幸运抽奖</div>
+          <div class="ld-sub">下单成功！转一转赢好礼</div>
+        </div>
+        <!-- 3-column slot machine -->
+        <div class="ld-machine">
+          <div v-for="(reel, c) in slotReels" :key="c" class="ld-col">
+            <div
+              class="ld-strip"
+              :class="{ 'ld-spinning': drawSpinning && slotCols[c] === null, 'ld-stopped': slotCols[c] !== null }"
+              :style="{ transform: `translateY(-${slotOffsets[c] * (100 / (reel.length || 1))}%)` }"
+            >
+              <div v-for="(sym, r) in reel" :key="r" class="ld-symbol">{{ SLOT_SYMBOLS[sym] }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="ld-points">我的积分：{{ drawPoints }}</div>
+        <!-- Result banner -->
+        <div v-if="drawResult" class="ld-result" :class="{ win: drawResult.win }">
+          <template v-if="drawResult.win">🎉 恭喜中奖：{{ drawResult.prize }}</template>
+          <template v-else>😅 {{ drawResult.prize }}</template>
+        </div>
+        <!-- Controls: first spin is free; replays cost 积分 -->
+        <div class="ld-actions">
+          <van-button v-if="!drawResult" block round type="danger" :loading="drawSpinning" @click="startDraw(false)">{{ drawSpinning ? '转动中...' : '免费抽奖' }}</van-button>
+          <template v-else>
+            <van-button block round type="danger" @click="startDraw(true)">再来一次 ({{ REPLAY_COST }}积分)</van-button>
+            <van-button block round plain @click="closeLuckyDraw(); router.push('/orders')">查看订单</van-button>
+          </template>
+        </div>
+        <div class="ld-rules">3个相同=88VIP折扣券 · 2个相同=10元券 · 其他=谢谢参与</div>
+      </div>
+    </van-popup>
+
     <!-- 结算错误恢复 (checkout error recovery) dialog -->
     <van-dialog
       v-model:show="showCheckoutError"
@@ -662,6 +924,8 @@ function fmt(n) { return Number(n).toFixed(2) }
         <van-button v-else block type="danger" @click="retryCheckout">重试</van-button>
       </div>
     </van-dialog>
+    <!-- Confetti host (彩纸) for lucky draw winners -->
+    <div id="tm-confetti" class="tm-confetti-host"></div>
   </div>
 </template>
 
@@ -758,6 +1022,19 @@ function fmt(n) { return Number(n).toFixed(2) }
 .rec-name { font-size: 12px; color: #333; line-height: 16px; height: 32px; margin-top: 6px; }
 .rec-bottom { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 4px; }
 .rec-bottom .price { color: #ff0036; font-size: 14px; font-weight: bold; }
+/* 搭配购买 (cart companion suggestions) */
+.companion-section { background: #fff; margin: 8px 0; padding: 12px; }
+.comp-head { font-size: 15px; font-weight: bold; color: #333; margin-bottom: 10px; }
+.comp-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid #f5f5f5; }
+.comp-item:first-of-type { border-top: none; }
+.comp-anchor { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; width: 60px; }
+.comp-anchor-name { font-size: 10px; color: #999; max-width: 60px; text-align: center; }
+.comp-arrow { color: #ccc; font-size: 16px; flex-shrink: 0; }
+.comp-pick { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.comp-pick-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.comp-pick-name { font-size: 11px; color: #ff0036; }
+.comp-pick-title { font-size: 12px; color: #333; line-height: 16px; }
+.comp-pick-price { font-size: 14px; color: #ff0036; font-weight: bold; }
 /* Group buy invite popup (好友拼单邀请) */
 .gb-popup { padding: 0 0 18px; overflow: hidden; }
 .gb-hero { background: linear-gradient(135deg, #ff0036 0%, #ff5577 50%, #ffb347 100%); color: #fff; padding: 26px 18px 20px; text-align: center; }
@@ -777,4 +1054,33 @@ function fmt(n) { return Number(n).toFixed(2) }
 .co-countdown.co-contact { font-size: 15px; font-weight: bold; }
 .co-retries { font-size: 12px; color: #999; margin-top: 6px; }
 .co-actions { display: flex; gap: 12px; padding: 16px 20px 20px; }
+/* 下单抽奖 (order lucky draw) */
+.ld-popup { padding: 0 0 18px; overflow: hidden; }
+.ld-hero { background: linear-gradient(135deg, #ff0036 0%, #ff5577 50%, #ffb347 100%); color: #fff; padding: 24px 18px 18px; text-align: center; }
+.ld-title { font-size: 20px; font-weight: bold; letter-spacing: 0.5px; }
+.ld-sub { font-size: 13px; opacity: 0.95; margin-top: 6px; }
+.ld-machine { display: flex; gap: 8px; justify-content: center; margin: 20px 16px; background: #222; border-radius: 12px; padding: 10px; box-shadow: inset 0 2px 8px rgba(0,0,0,0.5); }
+.ld-col { width: 64px; height: 64px; overflow: hidden; border-radius: 8px; background: #fff; position: relative; }
+.ld-symbol { height: 64px; line-height: 64px; text-align: center; font-size: 38px; }
+/* The strip is one symbol tall via the column's overflow; we translate by whole
+   symbol heights (slotOffsets * 100% of a 64px symbol). */
+.ld-strip { will-change: transform; }
+/* While spinning we cycle rapidly; once a column stops we ease into place. */
+.ld-strip.ld-spinning { animation: ld-spin 0.12s steps(1) infinite; }
+.ld-strip.ld-stopped { transition: transform 0.5s cubic-bezier(0.15, 0.85, 0.25, 1); }
+/* Scroll one symbol (64px) per step for a crisp slot-machine blur effect. */
+@keyframes ld-spin { 0% { transform: translateY(0); } 100% { transform: translateY(-64px); } }
+.ld-points { text-align: center; font-size: 13px; color: #ff0036; margin: -6px 0 10px; }
+.ld-result { text-align: center; font-size: 16px; font-weight: bold; color: #666; padding: 6px 0 14px; }
+.ld-result.win { color: #ff0036; font-size: 18px; animation: ld-pop 0.4s ease; }
+@keyframes ld-pop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+.ld-actions { display: flex; flex-direction: column; gap: 10px; padding: 0 18px; }
+.ld-rules { text-align: center; font-size: 11px; color: #999; margin-top: 12px; line-height: 18px; }
+/* Confetti host (彩纸) — fixed full-screen, pointer-events-none. */
+.tm-confetti-host { position: fixed; inset: 0; pointer-events: none; z-index: 10000; overflow: hidden; }
+.tm-confetti-chip { position: absolute; top: -12px; width: 9px; height: 14px; border-radius: 2px; opacity: 0; animation: tm-confetti-fall 2.2s ease-in forwards; }
+@keyframes tm-confetti-fall {
+  0% { opacity: 1; transform: translateY(0) rotate(0deg); }
+  100% { opacity: 0; transform: translateY(105vh) rotate(720deg); }
+}
 </style>
