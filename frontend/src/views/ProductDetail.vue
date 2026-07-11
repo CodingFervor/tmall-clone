@@ -64,6 +64,36 @@ function stopRotate360() {
   if (rotateTimer) { clearInterval(rotateTimer); rotateTimer = null }
   rotating360.value = false
 }
+// ---- AR试穿 (AR try-on placeholder) ----
+// Surfaces a 📷 AR试穿 button on the product image only when the product's
+// tags (or name/subtitle as a fallback) mention a try-on-eligible category
+// keyword: 衣/裤/裙/鞋/帽/妆/护肤. The overlay simulates a camera session:
+// black backdrop, "正在初始化AR..." for 1.5s, then the product image is
+// overlaid as a "preview" and 📸 capture shows a toast. A ✕ closes it.
+const AR_KEYWORDS = ['衣', '裤', '裙', '鞋', '帽', '妆', '护肤']
+const arSupported = computed(() => {
+  if (!product.value) return false
+  const hay = [product.value.tags, product.value.name, product.value.subtitle]
+    .filter(Boolean).join(' ')
+  return AR_KEYWORDS.some((k) => hay.includes(k))
+})
+const showAR = ref(false)
+const arReady = ref(false)
+let arInitTimer = null
+function openAR() {
+  showAR.value = true
+  arReady.value = false
+  if (arInitTimer) clearTimeout(arInitTimer)
+  arInitTimer = setTimeout(() => { arReady.value = true }, 1500)
+}
+function closeAR() {
+  showAR.value = false
+  arReady.value = false
+  if (arInitTimer) { clearTimeout(arInitTimer); arInitTimer = null }
+}
+function arCapture() {
+  showToast('📸 已截图保存')
+}
 // Review summary stats (评价概览统计): average rating, good-rate (4-5★),
 // and per-star distribution counts (index 0 = 5★ ... index 4 = 1★).
 const reviewStats = computed(() => {
@@ -558,6 +588,8 @@ onUnmounted(() => {
   if (videoObserver) { videoObserver.disconnect(); videoObserver = null }
   // Stop the 360° turntable timer if it was running.
   stopRotate360()
+  // Stop the AR try-on init timer if it was running.
+  if (arInitTimer) { clearTimeout(arInitTimer); arInitTimer = null }
 })
 </script>
 
@@ -607,7 +639,19 @@ onUnmounted(() => {
       <van-image v-else width="100%" height="375" :src="product.image" fit="cover" />
       <!-- 360° entry button (3D rotate placeholder) -->
       <div class="gallery-360-btn" @click="startRotate360">🔄 360°</div>
+      <!-- AR试穿 entry button (AR try-on placeholder): only for eligible categories -->
+      <div v-if="arSupported" class="gallery-ar-btn" @click="openAR">📷 AR试穿</div>
     </template>
+    <!-- AR试穿 camera overlay (AR try-on placeholder): black bg, init delay, capture toast -->
+    <div v-if="showAR" class="ar-overlay">
+      <div class="ar-close" @click="closeAR">✕</div>
+      <div v-if="!arReady" class="ar-init">正在初始化AR...</div>
+      <template v-else>
+        <van-image class="ar-preview" width="220" height="220" radius="12" :src="product.image" fit="cover" />
+        <div class="ar-hint">👆 挪动手机对准试穿位置</div>
+        <van-button class="ar-capture-btn" round type="danger" @click="arCapture">📸 拍照</van-button>
+      </template>
+    </div>
     <div class="price-block">
       <span class="big-price">¥{{ fmt(currentPrice()) }}</span>
       <span class="origin">¥{{ fmt(product.original_price) }}</span>
@@ -1102,6 +1146,15 @@ onUnmounted(() => {
 .om-tip { text-align: center; font-size: 13px; color: #666; padding: 12px; background: #fff5f6; border: 1px solid #ffd6df; border-radius: 8px; line-height: 20px; }
 /* 360°展示 (3D rotate placeholder) */
 .gallery-360-btn { position: absolute; top: 56px; right: 14px; z-index: 6; background: rgba(0,0,0,0.55); color: #fff; font-size: 12px; padding: 6px 12px; border-radius: 16px; cursor: pointer; user-select: none; backdrop-filter: blur(2px); box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+/* AR试穿 entry button (AR try-on placeholder) — sits below the 360° button */
+.gallery-ar-btn { position: absolute; top: 96px; right: 14px; z-index: 6; background: rgba(255,0,54,0.85); color: #fff; font-size: 12px; padding: 6px 12px; border-radius: 16px; cursor: pointer; user-select: none; backdrop-filter: blur(2px); box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+/* AR试穿 camera overlay (AR try-on placeholder): full-screen black camera sim */
+.ar-overlay { position: fixed; inset: 0; z-index: 2000; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+.ar-close { position: absolute; top: 14px; right: 16px; width: 32px; height: 32px; line-height: 30px; text-align: center; border-radius: 50%; background: rgba(255,255,255,0.18); color: #fff; font-size: 18px; cursor: pointer; user-select: none; }
+.ar-init { color: #fff; font-size: 16px; letter-spacing: 1px; }
+.ar-preview { box-shadow: 0 0 0 2px rgba(255,255,255,0.25), 0 8px 30px rgba(0,0,0,0.6); opacity: 0.92; }
+.ar-hint { color: rgba(255,255,255,0.8); font-size: 13px; }
+.ar-capture-btn { padding: 0 28px; }
 .gallery-360 { position: relative; background: #000; perspective: 1000px; }
 .gallery-360 .g360-img { display: block; transform-origin: center center; animation: g360-rotatey 1.5s ease-in-out; }
 @keyframes g360-rotatey { 0% { transform: rotateY(0deg); } 100% { transform: rotateY(360deg); } }

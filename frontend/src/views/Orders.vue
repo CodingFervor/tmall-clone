@@ -122,6 +122,43 @@ function statusText(s) { return { pending: '待付款', paid: '已付款', shipp
 function fmt(n) { return Number(n).toFixed(2) }
 function parseItems(json) { try { return JSON.parse(json) } catch { return [] } }
 
+// ---- 评价提醒 (review reminder) ----
+// Completed orders that the user hasn't yet reviewed surface a pulsing
+// "📝写评价赚积分" badge. The backend doesn't link reviews to orders, so we
+// treat a completed order as "needs review" until the reminder is dismissed
+// or the user opens the review flow. Dismissed order ids are remembered in
+// localStorage so the nag stays quiet within and across sessions.
+const REVIEW_DISMISS_KEY = 'tm_review_dismissed'
+const reviewedDismissed = ref(loadDismissed())
+function loadDismissed() {
+  try { return new Set(JSON.parse(localStorage.getItem(REVIEW_DISMISS_KEY) || '[]')) } catch { return new Set() }
+}
+function saveDismissed() {
+  try { localStorage.setItem(REVIEW_DISMISS_KEY, JSON.stringify([...reviewedDismissed.value])) } catch { /* ignore */ }
+}
+// An order needs a review reminder when it's completed and not dismissed.
+function needsReview(o) {
+  return o.status === 'completed' && !reviewedDismissed.value.has(o.id)
+}
+// "稍后" dismiss: remember the order id so the badge stays gone.
+function dismissReview(o) {
+  reviewedDismissed.value.add(o.id)
+  reviewedDismissed.value = new Set(reviewedDismissed.value)
+  saveDismissed()
+  showToast('稍后提醒')
+}
+// "+5积分" incentive: jump to the first product's detail to write a review,
+// and mark this order as handled so the badge clears.
+function goReview(o) {
+  reviewedDismissed.value.add(o.id)
+  reviewedDismissed.value = new Set(reviewedDismissed.value)
+  saveDismissed()
+  const items = parseItems(o.items_json)
+  const pid = items.length ? items[0].product_id : null
+  if (pid) router.push('/product/' + pid)
+  else showSuccessToast('感谢支持，+5积分已到账')
+}
+
 // Order lifecycle timeline (订单全流程时间线): per-order expanded state keyed by order id.
 const expanded = ref({})
 function toggleProgress(o) { expanded.value[o.id] = !expanded.value[o.id] }
@@ -251,6 +288,13 @@ async function copyToClipboard(text) {
       <van-empty v-if="!filteredOrders.length" :description="'暂无' + (statusTabs.find((t) => t.key === activeStatus)?.label || '') + '订单'" />
       <div v-for="o in filteredOrders" :key="o.id" class="order-card">
         <div class="o-head"><span class="o-no">订单号: {{ o.order_no }}</span><span class="o-status">{{ statusText(o.status) }}</span></div>
+        <!-- 评价提醒 (review reminder): pulsing badge for unreviewed completed orders -->
+        <div v-if="needsReview(o)" class="review-reminder">
+          <span class="rr-badge">📝写评价赚积分</span>
+          <span class="rr-incentive">+5积分</span>
+          <span class="rr-dismiss" @click="dismissReview(o)">稍后</span>
+          <van-button size="mini" type="danger" round class="rr-go" @click="goReview(o)">去评价</van-button>
+        </div>
         <div v-if="o.status === 'pending'" class="o-countdown" :class="{ 'timed-out': isTimedOut(o) }">{{ countdown(o) }}</div>
         <!-- Multi-package shipment (拆包发货): when an order spans 2+ shops, show per-package groups. -->
         <template v-if="packagesOf(o).length >= 2">
