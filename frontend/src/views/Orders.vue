@@ -363,6 +363,13 @@ async function copyToClipboard(text) {
 .o-head { display: flex; justify-content: space-between; font-size: 12px; color: #999; margin-bottom: 8px; }
 .o-status { color: #ff0036; }
 .o-countdown { color: #ff0036; font-size: 13px; font-weight: bold; margin-bottom: 8px; }
+/* 评价提醒 (review reminder): pulsing badge for unreviewed completed orders */
+.review-reminder { display: flex; align-items: center; gap: 8px; margin: 8px 0; padding: 8px 12px; background: linear-gradient(90deg, #fff5f6, #ffeef0); border: 1px solid #ffd6df; border-radius: 8px; flex-wrap: wrap; }
+.rr-badge { font-size: 13px; font-weight: bold; color: #ff0036; animation: rr-pulse 1.4s ease-in-out infinite; }
+@keyframes rr-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.06); opacity: 0.8; } }
+.rr-incentive { font-size: 11px; font-weight: bold; color: #fff; background: #ff9800; padding: 1px 8px; border-radius: 10px; }
+.rr-dismiss { margin-left: auto; font-size: 12px; color: #999; cursor: pointer; padding: 2px 6px; }
+.rr-go { }
 .o-countdown.timed-out { color: #999; }
 .o-item { display: flex; gap: 10px; padding: 6px 0; }
 .pkg-block { border: 1px solid #ffe0e8; border-radius: 8px; padding: 8px; margin-bottom: 8px; background: #fff8fa; }

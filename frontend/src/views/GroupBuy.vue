@@ -28,6 +28,51 @@ function fmtRemain(ms) {
 function progress(d) {
   return Math.min(100, Math.round((d.joined / d.required) * 100))
 }
+// ---- 拼团圆环倒计时 (group-buy ring countdown) ----
+// An SVG circle whose stroke depletes (stroke-dashoffset grows) as the deal's
+// end_time approaches. The total duration spans created_at → end_time so the
+// arc represents elapsed time. Center text shows the remaining HH:MM. The ring
+// color steps green (>50%) → orange (<50%) → red (<25%) → gray (expired).
+const RING_R = 26          // radius of the countdown ring (viewBox 64x64)
+const RING_C = 2 * Math.PI * RING_R // circumference for stroke-dashoffset math
+// Full duration of the deal (created_at → end_time) in ms.
+function ringTotalMs(d) {
+  const start = new Date(d.created_at).getTime()
+  const end = new Date(d.end_time).getTime()
+  if (isNaN(start) || isNaN(end) || end <= start) return 1
+  return end - start
+}
+// Remaining fraction 0..1 of the deal window (1 = just started, 0 = ended).
+function ringFraction(d) {
+  const remain = remainMs(d)
+  const total = ringTotalMs(d)
+  if (total <= 0) return 0
+  return Math.max(0, Math.min(1, remain / total))
+}
+// stroke-dashoffset: 0 = full ring drawn, C = fully depleted (empty).
+function ringOffset(d) {
+  return RING_C * (1 - ringFraction(d))
+}
+// Center label: remaining HH:MM (hours may exceed 99 for long windows).
+function ringLabel(d) {
+  const ms = remainMs(d)
+  if (ms <= 0) return '结束'
+  const totalMin = Math.floor(ms / 60000)
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+// Ring color by remaining-time fraction: green>50% / orange<50% / red<25% / gray expired.
+function ringColor(d) {
+  if (d.status === 'expired' || remainMs(d) <= 0) return '#bbb'
+  const f = ringFraction(d)
+  if (f > 0.5) return '#07c160' // green
+  if (f > 0.25) return '#ff9800' // orange
+  return '#ff0036' // red
+}
+function ringExpired(d) {
+  return d.status === 'expired' || remainMs(d) <= 0
+}
 // Dicebear avatars: deterministic per deal so re-renders stay stable, 2-4 members, first is the leader.
 function memberAvatars(d) {
   const count = Math.min(4, Math.max(2, d.joined || 2))
@@ -86,7 +131,21 @@ function fmt(n) { return Number(n).toFixed(2) }
             <span class="gp-text">{{ d.joined }}/{{ d.required }}人</span>
           </div>
           <div class="gc-bottom">
-            <span class="gc-countdown">⏰ {{ fmtRemain(remainMs(d)) }}</span>
+            <!-- 拼团圆环倒计时 (ring countdown): depleting arc + HH:MM center -->
+            <div class="gc-ring" :class="{ expired: ringExpired(d) }">
+              <svg width="64" height="64" viewBox="0 0 64 64">
+                <circle cx="32" cy="32" :r="RING_R" fill="none" stroke="#f0f0f0" stroke-width="5" />
+                <circle
+                  cx="32" cy="32" :r="RING_R" fill="none"
+                  :stroke="ringColor(d)" stroke-width="5" stroke-linecap="round"
+                  :stroke-dasharray="RING_C"
+                  :stroke-dashoffset="ringOffset(d)"
+                  :transform="'rotate(-90 32 32)'"
+                  class="ring-progress"
+                />
+              </svg>
+              <span class="ring-label" :style="{ color: ringColor(d) }">{{ ringLabel(d) }}</span>
+            </div>
             <van-button size="small" type="danger" round :disabled="d.status !== 'active'" @click="join(d)">
               {{ d.status === 'success' ? '已成团' : '去拼团' }}
             </van-button>
@@ -118,5 +177,9 @@ function fmt(n) { return Number(n).toFixed(2) }
 .gp-fill { height: 100%; background: linear-gradient(90deg, #ff9800, #ff0036); transition: width 0.3s; }
 .gp-text { font-size: 11px; color: #ff0036; white-space: nowrap; }
 .gc-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: auto; }
-.gc-countdown { color: #ff0036; font-size: 14px; font-weight: bold; font-variant-numeric: tabular-nums; }
+/* 拼团圆环倒计时 (group-buy ring countdown) */
+.gc-ring { position: relative; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; }
+.gc-ring .ring-progress { transition: stroke-dashoffset 1s linear, stroke 0.4s; }
+.gc-ring .ring-label { position: absolute; font-size: 13px; font-weight: bold; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+.gc-ring.expired { opacity: 0.7; }
 </style>
