@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { getProducts, getBrands, getCategories } from '../api'
@@ -116,6 +116,16 @@ function tagStyle(i) {
 function searchTag(tag) {
   router.push({ name: 'search', query: { q: tag } })
 }
+
+// ---- 首页跑马灯 (home promotional marquee) ----
+// A continuously scrolling promotional bar rendered below the flash banner.
+// The track is duplicated so the CSS translateX animation loops seamlessly.
+// Tapping a message shows a toast (tappable toast).
+const marqueeMessages = ['🎉满199减15', '📦全国包邮', '⚡限时秒杀', '🎁新人礼包', '💎88VIP折扣']
+const marqueeTrack = computed(() => [...marqueeMessages, ...marqueeMessages])
+function tapMarquee(msg) {
+  showToast(msg.replace(/[🎉📦⚡🎁💎]/g, '').trim())
+}
 </script>
 
 <template>
@@ -166,6 +176,21 @@ function searchTag(tag) {
     <div class="flash-banner" :class="{ flashing: flashing }" @click="router.push('/seckill')">
       <span class="fb-text">⚡ 限时秒杀 距开抢还有</span>
       <span class="fb-countdown" :class="{ flashing: flashing }">{{ countdown }}</span>
+    </div>
+
+    <!-- 首页跑马灯 (home promotional marquee): infinite CSS translateX scroll -->
+    <div class="marquee">
+      <span class="mq-icon">📣</span>
+      <div class="mq-viewport">
+        <div class="mq-track">
+          <span
+            v-for="(m, i) in marqueeTrack"
+            :key="i"
+            class="mq-item"
+            @click="tapMarquee(m)"
+          >{{ m }}</span>
+        </div>
+      </div>
     </div>
 
     <!-- 限时秒杀入口 -->
@@ -258,6 +283,15 @@ function searchTag(tag) {
 .fb-countdown { font-family: 'Courier New', Consolas, monospace; font-size: 20px; letter-spacing: 1px; font-variant-numeric: tabular-nums; padding: 2px 10px; border-radius: 6px; background: rgba(0, 0, 0, 0.22); }
 .fb-countdown.flashing { font-family: inherit; font-size: 16px; background: rgba(255, 255, 255, 0.25); animation: blink 0.5s ease-in-out infinite alternate; }
 @keyframes blink { from { opacity: 1; } to { opacity: 0.6; } }
+/* 首页跑马灯 (home promotional marquee) */
+.marquee { display: flex; align-items: center; gap: 6px; margin: 0 8px 8px; padding: 8px 12px; background: linear-gradient(90deg, #fff5e6, #fff0f3); border-radius: 8px; overflow: hidden; }
+.mq-icon { font-size: 14px; flex-shrink: 0; }
+.mq-viewport { flex: 1; overflow: hidden; }
+.mq-track { display: inline-flex; align-items: center; gap: 28px; white-space: nowrap; will-change: transform; animation: mq-scroll 16s linear infinite; }
+.mq-track:hover { animation-play-state: paused; }
+.mq-item { font-size: 13px; color: #ff0036; font-weight: bold; cursor: pointer; user-select: none; }
+.mq-item:active { opacity: 0.6; }
+@keyframes mq-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 .seckill-entry { display: flex; align-items: center; gap: 8px; margin: 8px; background: linear-gradient(90deg, #ff0036, #ff5577); border-radius: 8px; padding: 12px 16px; color: #fff; cursor: pointer; }
 .se-icon { font-size: 20px; }
 .se-title { font-size: 16px; font-weight: bold; }

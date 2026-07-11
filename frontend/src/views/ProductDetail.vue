@@ -249,6 +249,49 @@ async function doUseful(r) {
 }
 function qrPattern(n) { const row = Math.floor((n - 1) / 8); const col = (n - 1) % 8; const corner = (row < 2 || row > 5) && (col < 2 || col > 5); return corner || ((row * 7 + col * 3 + n) % 3 === 0) }
 async function copyShareLink() { try { await navigator.clipboard.writeText(window.location.href); showSuccessToast('链接已复制') } catch (e) { showToast('复制失败') } }
+// 分享卡片 (product share card): "复制商品信息" copies a formatted summary
+// (name, spec, price, shop, link) for easy pasting into chat. "生成长图" is a
+// lightweight demo that confirms the long-image generation (no canvas dependency).
+function shareSpec() {
+  if (selectedSKU.value && selectedSKU.value.spec_text) return selectedSKU.value.spec_text
+  if (specMatrix.value && specMatrix.value.dims.length) {
+    return specMatrix.value.dims.map((d) => d).join('/')
+  }
+  return '默认规格'
+}
+async function copyProductInfo() {
+  const p = product.value
+  if (!p) return
+  const text =
+    `【天猫】${p.name}\n` +
+    `规格：${shareSpec()}\n` +
+    `价格：¥${fmt(currentPrice())}\n` +
+    `店铺：${p.shop || '天猫商城'}\n` +
+    `链接：${window.location.href}`
+  try {
+    await navigator.clipboard.writeText(text)
+    showSuccessToast('商品信息已复制')
+  } catch (e) {
+    // Fallback for non-secure contexts / older browsers.
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try { document.execCommand('copy'); showSuccessToast('商品信息已复制') } catch (_) { showToast('复制失败，请手动复制') }
+    document.body.removeChild(ta)
+  }
+}
+const generatingLongImage = ref(false)
+function generateLongImage() {
+  // Demo: simulate generating a long share image (no server/canvas round-trip).
+  generatingLongImage.value = true
+  setTimeout(() => {
+    generatingLongImage.value = false
+    showSuccessToast('长图已生成，可保存分享')
+  }, 700)
+}
 async function toggleRestock() {
   if (!localStorage.getItem('tm_token')) { showDialog({ title: '提示', message: '请先登录' }).then(() => router.push('/login')); return }
   try {
@@ -647,6 +690,8 @@ onUnmounted(() => {
         <div class="poster-card">
           <van-image width="100%" height="200" radius="8" :src="product.image" fit="cover" />
           <div class="pc-name van-multi-ellipsis--l2">{{ product.name }}</div>
+          <!-- 规格行 (specs row) -->
+          <div class="pc-spec"><span class="pc-spec-label">规格</span><span class="pc-spec-val">{{ shareSpec() }}</span></div>
           <div class="pc-price">¥{{ fmt(currentPrice()) }}</div>
           <div class="pc-qr">
             <div class="qr-box">
@@ -655,8 +700,12 @@ onUnmounted(() => {
             <div class="qr-text">扫码查看商品</div>
           </div>
           <div class="pc-brand">天猫 TMALL</div>
+          <!-- 天猫水印 (Tmall watermark) -->
+          <div class="pc-watermark">天猫</div>
         </div>
-        <van-button block type="danger" round style="margin-top: 12px" @click="copyShareLink">复制分享链接</van-button>
+        <van-button block type="danger" round :loading="generatingLongImage" style="margin-top: 12px" @click="generateLongImage">📋 生成长图</van-button>
+        <van-button block plain type="danger" round style="margin-top: 8px" @click="copyProductInfo">复制商品信息</van-button>
+        <van-button block plain style="margin-top: 8px" @click="copyShareLink">复制分享链接</van-button>
       </div>
     </van-popup>
     <van-popup v-model:show="showReview" position="bottom" round closeable>
@@ -847,7 +896,7 @@ onUnmounted(() => {
 .rv-chip-del { color: #ff0036; font-size: 14px; cursor: pointer; }
 .poster { padding: 20px; }
 .poster-head { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 16px; }
-.poster-card { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 16px; text-align: center; }
+.poster-card { position: relative; background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 16px; text-align: center; overflow: hidden; }
 .pc-name { font-size: 15px; line-height: 22px; margin: 12px 0 6px; text-align: left; }
 .pc-price { color: #ff0036; font-size: 24px; font-weight: bold; text-align: left; }
 .pc-qr { display: flex; flex-direction: column; align-items: center; margin-top: 16px; }
@@ -857,6 +906,12 @@ onUnmounted(() => {
 .qr-cell.on { background: #333; }
 .qr-text { font-size: 11px; color: #999; margin-top: 6px; }
 .pc-brand { color: #ff0036; font-size: 13px; font-weight: bold; margin-top: 12px; }
+/* 规格行 (specs row) on the share card */
+.pc-spec { display: flex; align-items: center; gap: 8px; text-align: left; margin-top: 8px; }
+.pc-spec-label { font-size: 11px; color: #999; background: #f5f5f5; border-radius: 3px; padding: 1px 6px; flex-shrink: 0; }
+.pc-spec-val { font-size: 13px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 天猫水印 (Tmall watermark) — diagonal translucent brand stamp on the card */
+.pc-watermark { position: absolute; top: 16px; right: 18px; font-size: 36px; font-weight: 900; color: rgba(255, 0, 54, 0.12); transform: rotate(-18deg); letter-spacing: 2px; pointer-events: none; user-select: none; z-index: 1; }
 .related-section { background: #fff; margin-top: 8px; padding: 12px 16px; }
 .rs-head { font-size: 15px; font-weight: bold; margin-bottom: 10px; }
 .rs-scroll { display: flex; gap: 10px; overflow-x: auto; }

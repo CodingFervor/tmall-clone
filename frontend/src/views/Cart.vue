@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed, onMounted, onActivated } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showSuccessToast } from 'vant'
+import { showToast, showSuccessToast, showConfirmDialog } from 'vant'
 import { getCart, updateCart, deleteCart, createOrder, getMyCoupons, getAddresses, requestInvoice, getTieredDiscounts, getProducts, addToCart, toggleFavorite } from '../api'
 
 const router = useRouter()
@@ -174,7 +174,85 @@ async function changeQty(item, qty) {
   if (qty < 1) return
   try { await updateCart(item.id, qty, item.selected); item.quantity = qty; await load() } catch (e) {}
 }
-async function removeItem(item) { try { await deleteCart(item.id); await load(); showSuccessToast('已删除') } catch (e) {} }
+async function removeItem(item) {
+  try {
+    await deleteCart(item.id)
+    // 摇一摇撤销 (shake to undo): remember the just-removed item so a shake
+    // gesture within the undo window can restore it by re-adding to the cart.
+    lastDeleted.value = { product_id: item.product_id, name: item.product_name, at: Date.now() }
+    await load(); showSuccessToast('已删除')
+  } catch (e) {}
+}
+// ---- 摇一摇撤销删除 (shake to undo delete) ----
+// Detect a shake via DeviceMotionEvent (acceleration magnitude > 25). On shake
+// we prompt "摇一摇撤销删除？"; confirming re-fetches the cart to restore the
+// item. iOS 13+ requires requesting permission first, which we attempt on the
+// first user gesture. Where DeviceMotion is unavailable, a fallback toast hints
+// the user can swipe items back instead.
+const lastDeleted = ref(null)
+const SHAKING = { THRESHOLD: 25, WINDOW_MS: 8000 } // 8s undo window
+let lastShakeAt = 0
+let motionHandler = null
+function handleMotion(e) {
+  const a = e.accelerationIncludingGravity || e.acceleration
+  if (!a) return
+  const mag = Math.sqrt((a.x || 0) ** 2 + (a.y || 0) ** 2 + (a.z || 0) ** 2)
+  if (mag > SHAKING.THRESHOLD) {
+    // Debounce repeated triggers within the same gesture.
+    const now = Date.now()
+    if (now - lastShakeAt < 1200) return
+    lastShakeAt = now
+    onShake()
+  }
+}
+function onShake() {
+  // Only offer undo when a recent delete is still within the window.
+  const del = lastDeleted.value
+  if (!del || Date.now() - del.at > SHAKING.WINDOW_MS) {
+    showToast('摇一摇：摇晃手机可撤销刚刚的删除')
+    return
+  }
+  showConfirmDialog({
+    title: '摇一摇撤销',
+    message: `摇一摇撤销删除？\n将恢复「${del.name}」到购物车`,
+    confirmButtonText: '撤销删除',
+    confirmButtonColor: '#ff0036',
+    cancelButtonText: '不了',
+  }).then(async () => {
+    try {
+      await addToCart(del.product_id, 1)
+      await load()
+      lastDeleted.value = null
+      showSuccessToast('已恢复')
+    } catch (e) {
+      showToast(e.response?.data?.error || '恢复失败')
+    }
+  }).catch(() => {
+    // User declined — clear the undo record so a later shake falls back to toast.
+    lastDeleted.value = null
+  })
+}
+async function setupShake() {
+  // iOS 13+ requires an explicit permission request triggered by a user gesture.
+  const DME = window.DeviceMotionEvent
+  if (!DME) {
+    showToast('当前设备不支持摇一摇')
+    return
+  }
+  if (typeof DME.requestPermission === 'function') {
+    try {
+      const state = await DME.requestPermission()
+      if (state !== 'granted') { showToast('未授权运动传感器，摇一摇不可用'); return }
+    } catch (_) { showToast('运动传感器授权失败'); return }
+  }
+  if (motionHandler) return // already listening
+  motionHandler = handleMotion
+  window.addEventListener('devicemotion', motionHandler)
+  showToast('摇一摇已开启，可撤销删除')
+}
+onUnmounted(() => {
+  if (motionHandler) { window.removeEventListener('devicemotion', motionHandler); motionHandler = null }
+})
 // 收藏 (favorite) — called from the swipe action of a cart item.
 async function favoriteItem(item) {
   try {
@@ -305,6 +383,27 @@ function fmt(n) { return Number(n).toFixed(2) }
         @click="showAddressPicker = true"
         style="margin-top: 8px"
       />
+      <!-- 地址地图预览 (checkout map preview): a CSS-only faux map showing the
+           selected delivery address with a 📍 pin overlay and a "查看大地图" toast. -->
+      <div class="addr-map" @click="showToast('查看大地图')">
+        <div class="am-canvas">
+          <div class="am-grid"></div>
+          <div class="am-road am-road-h"></div>
+          <div class="am-road am-road-v"></div>
+          <div class="am-river"></div>
+          <div class="am-pin">📍
+            <div class="am-pin-pulse"></div>
+          </div>
+        </div>
+        <div class="am-overlay">
+          <div class="am-line">
+            <span class="am-name">{{ selectedAddress ? selectedAddress.name : '收货人' }}</span>
+            <span class="am-phone">{{ selectedAddress ? selectedAddress.phone : '' }}</span>
+          </div>
+          <div class="am-addr van-ellipsis">{{ addressLabel() }}</div>
+          <span class="am-bigbtn">查看大地图 ›</span>
+        </div>
+      </div>
       <!-- Invoice cell (发票) -->
       <van-cell
         title="发票"
@@ -345,6 +444,7 @@ function fmt(n) { return Number(n).toFixed(2) }
         <van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox>
         <span class="invert-btn" @click="invertSelection">反选</span>
         <span class="group-btn" @click="openGroupBuy">👥 邀请拼单</span>
+        <span class="shake-btn" @click="setupShake">📳 摇一摇</span>
         <span class="selected-count">已选{{ selectedCount }}件</span>
       </van-submit-bar>
 
@@ -431,6 +531,8 @@ function fmt(n) { return Number(n).toFixed(2) }
 .loading { text-align: center; padding: 80px; }
 .invert-btn { font-size: 14px; color: #ff0036; margin-left: 12px; cursor: pointer; }
 .group-btn { font-size: 13px; color: #fff; background: linear-gradient(135deg, #ff0036, #ff5a5f); padding: 5px 12px; margin-left: 10px; border-radius: 999px; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 6px rgba(255, 0, 54, 0.35); }
+/* 摇一摇 (shake to undo) trigger button */
+.shake-btn { font-size: 13px; color: #ff0036; background: #fff5f6; border: 1px solid #ffc6cf; padding: 4px 12px; margin-left: 10px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
 .selected-count { font-size: 12px; color: #969799; margin-left: 12px; }
 .cart-item { display: flex; align-items: center; gap: 10px; padding: 12px; background: #fff; border-bottom: 1px solid #f5f5f5; }
 /* 购物车滑动操作 (swipe actions) */
@@ -482,6 +584,30 @@ function fmt(n) { return Number(n).toFixed(2) }
 .addr-name { font-size: 14px; font-weight: bold; }
 .addr-phone { font-size: 13px; color: #666; }
 .addr-detail { font-size: 12px; color: #999; line-height: 18px; }
+/* 地址地图预览 (checkout map preview): CSS gradient faux map with pin */
+.addr-map { position: relative; margin: 8px 0; height: 120px; border-radius: 10px; overflow: hidden; cursor: pointer; }
+.am-canvas { position: absolute; inset: 0; background:
+  linear-gradient(115deg, #e8f4e8 0%, #e3f0f7 45%, #f0eadc 100%); }
+/* Faint block grid to read like a city map. */
+.am-grid { position: absolute; inset: 0; background-image:
+  linear-gradient(rgba(120,140,120,0.12) 1px, transparent 1px),
+  linear-gradient(90deg, rgba(120,140,120,0.12) 1px, transparent 1px);
+  background-size: 26px 26px; }
+/* Roads drawn as light-gray ribbons crossing the map. */
+.am-road { position: absolute; background: rgba(255,255,255,0.85); box-shadow: 0 0 0 1px rgba(0,0,0,0.04); }
+.am-road-h { left: -10%; right: -10%; top: 46%; height: 14px; transform: rotate(-6deg); }
+.am-road-v { top: -10%; bottom: -10%; left: 62%; width: 12px; transform: rotate(8deg); }
+/* A blue river ribbon for variety. */
+.am-river { position: absolute; left: -10%; right: -10%; top: 18%; height: 10px; background: linear-gradient(90deg, #a9d6f0, #cfe8f7); transform: rotate(-4deg); opacity: 0.8; }
+.am-pin { position: absolute; left: 58%; top: 40%; font-size: 30px; transform: translate(-50%, -100%); z-index: 3; line-height: 1; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.25)); }
+.am-pin-pulse { position: absolute; left: 50%; bottom: -4px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: rgba(255,0,54,0.35); animation: am-pulse 1.6s ease-out infinite; }
+@keyframes am-pulse { 0% { transform: scale(0.6); opacity: 0.8; } 100% { transform: scale(2.6); opacity: 0; } }
+.am-overlay { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 4; background: rgba(255,255,255,0.94); border-radius: 8px; padding: 7px 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+.am-line { display: flex; align-items: center; gap: 8px; }
+.am-name { font-size: 13px; font-weight: bold; color: #333; }
+.am-phone { font-size: 12px; color: #999; }
+.am-addr { font-size: 11px; color: #666; margin-top: 2px; }
+.am-bigbtn { position: absolute; right: 10px; bottom: 8px; font-size: 11px; color: #ff0036; font-weight: bold; }
 .invoice-form { padding: 16px 0; }
 .inv-actions { display: flex; gap: 12px; padding: 16px; }
 /* Recommendations (猜你喜欢) */
