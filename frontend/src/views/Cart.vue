@@ -652,6 +652,28 @@ function couponLabel(uc) {
   return `满${c.threshold}减${c.value}`
 }
 function fmt(n) { return Number(n).toFixed(2) }
+// ---- 预估重量 (cart weight estimator) ----
+// Each product gets a deterministic weight in 0.1–5.0kg derived from a hash of
+// its product_id (so the same product always reports the same weight). The
+// selected-items total is the sum of weight × quantity; >10kg surfaces a
+// "大件商品" warning to suggest consolidated / heavy-goods shipping.
+function productWeight(productId) {
+  let h = (Number(productId) || 0) >>> 0
+  h = (h * 2654435761) >>> 0
+  h = (h ^ (h >>> 13)) >>> 0
+  // Map into [0.1, 5.0] kg (one decimal of precision, deterministic).
+  const w = 0.1 + ((h % 490) / 100) // 0.1 + [0.00..4.89] -> 0.10..4.99
+  return Math.round(w * 10) / 10
+}
+const estimatedWeight = computed(() => {
+  let total = 0
+  for (const it of items.value) {
+    if (it.selected !== 1) continue
+    total += productWeight(it.product_id) * (it.quantity || 1)
+  }
+  return Math.round(total * 10) / 10
+})
+const isHeavyOrder = computed(() => estimatedWeight.value > 10)
 </script>
 
 <template>
@@ -783,6 +805,11 @@ function fmt(n) { return Number(n).toFixed(2) }
             <div class="st-add">+ 凑单</div>
           </div>
         </div>
+      </div>
+      <!-- 预估重量 (cart weight estimator) for the selected items -->
+      <div class="weight-bar" :class="{ heavy: isHeavyOrder }">
+        <span class="wb-text">📦 预估重量: {{ estimatedWeight.toFixed(1) }}kg</span>
+        <span v-if="isHeavyOrder" class="wb-warn">⚠️ 大件商品，建议联系物流或拆分下单</span>
       </div>
       <van-submit-bar :price="finalTotal * 100" :button-text="'结算 (' + selectedCount + '件)'" @submit="checkout">
         <van-checkbox :model-value="allSelected" @click="toggleAll">全选</van-checkbox>
@@ -967,6 +994,11 @@ function fmt(n) { return Number(n).toFixed(2) }
 .st-name { font-size: 11px; color: #333; margin-top: 4px; }
 .st-price { font-size: 12px; color: #ff0036; font-weight: bold; }
 .st-add { font-size: 11px; color: #fff; background: linear-gradient(135deg, #ff0036, #ff5a5f); border-radius: 10px; padding: 3px 0; margin-top: 4px; }
+/* 预估重量 (cart weight estimator) */
+.weight-bar { display: flex; align-items: center; gap: 8px; margin: 0 16px 8px; padding: 8px 12px; background: #f0f7ff; border: 1px solid #cfe3f7; border-radius: 8px; font-size: 13px; color: #1989fa; }
+.weight-bar.heavy { background: #fff5f6; border-color: #ffd6df; color: #ff0036; }
+.wb-text { font-weight: bold; }
+.wb-warn { margin-left: auto; font-size: 12px; }
 .topup-hints { padding: 0 16px 8px; }
 .th-item { background: #fff8e6; color: #996600; font-size: 12px; padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; line-height: 18px; }
 .th-item b { color: #ff0036; }

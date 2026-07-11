@@ -33,6 +33,8 @@ applyDarkClass(darkMode.value)
 // ---- 个人速览 (quick stats) ----
 // 订单数 / 收藏数 / 优惠券数 / 积分数 — fetched from existing APIs.
 const stats = ref({ orders: 0, favorites: 0, coupons: 0, points: 0 })
+// 连续签到天数 (current check-in streak), used by the carbon-footprint card.
+const streak = ref(0)
 async function loadStats() {
   if (!loggedIn.value) { stats.value = { orders: 0, favorites: 0, coupons: 0, points: 0 }; return }
   try {
@@ -49,6 +51,16 @@ async function loadStats() {
     }
   } catch (_) { /* stats optional */ }
 }
+
+// ---- 碳足迹 (carbon footprint) ----
+// Green points are earned from eco-actions: the current check-in streak and
+// completed orders. Each point converts into a fixed CO₂ reduction, and the
+// reduction is also expressed as an equivalent number of trees planted.
+const CARBON_PER_POINT_KG = 0.5   // 每"绿色积分"约减少 0.5kg 碳排放
+const CO2_PER_TREE_KG = 20         // 一棵树年固碳约 20kg
+const greenPoints = computed(() => (streak.value * 5) + (stats.value.orders * 3))
+const carbonReducedKg = computed(() => Math.round(greenPoints.value * CARBON_PER_POINT_KG * 10) / 10)
+const treesEquivalent = computed(() => Math.max(0, Math.floor(carbonReducedKg.value / CO2_PER_TREE_KG)))
 
 // ---- 会员等级体系 (member growth levels) ----
 // thresholds: cumulative growth points required to reach each level
@@ -85,6 +97,7 @@ async function load() {
   loggedIn.value = !!localStorage.getItem('tm_token')
   if (!loggedIn.value) {
     growth.value = 0
+    streak.value = 0
     return
   }
   try {
@@ -92,12 +105,13 @@ async function load() {
     try {
       const st = await getCheckInStatus()
       growth.value = st.total_points || 0
-    } catch (_) { /* points optional */ }
+      streak.value = (st.last && st.last.streak) || 0
+    } catch (_) { streak.value = 0 /* points optional */ }
     await loadStats()
   } catch (e) { loggedIn.value = false }
 }
 onMounted(load); onActivated(load)
-function logout() { localStorage.removeItem('tm_token'); localStorage.removeItem('tm_user'); loggedIn.value = false; user.value = null; growth.value = 0; showToast('已退出登录') }
+function logout() { localStorage.removeItem('tm_token'); localStorage.removeItem('tm_user'); loggedIn.value = false; user.value = null; growth.value = 0; streak.value = 0; showToast('已退出登录') }
 
 // ---- 消息红点 (notification dots) ----
 // Each tracked cell records its last-visit timestamp in localStorage. A red dot
@@ -222,6 +236,27 @@ function goWithVisit(route, key) {
       </div>
     </div>
 
+    <!-- 碳足迹 (carbon footprint) — green-themed card driven by check-in streak + orders -->
+    <div class="carbon-card" :class="{ 'cc-locked': !loggedIn }">
+      <div class="cc-head">
+        <span class="cc-icon">🌱</span>
+        <span class="cc-title">碳足迹</span>
+        <span class="cc-points">绿色积分 <b>{{ greenPoints }}</b></span>
+      </div>
+      <div class="cc-body">
+        <div class="cc-stat">
+          <div class="cc-num">减少 {{ carbonReducedKg }} <small>kg碳排放</small></div>
+          <div class="cc-sub">相当于种了 {{ treesEquivalent }} 棵树 🌳</div>
+        </div>
+        <div class="cc-breakdown">
+          <span class="cb-item">签到 {{ streak }} 天 × 5</span>
+          <span class="cb-sep">·</span>
+          <span class="cb-item">订单 {{ stats.orders }} 笔 × 3</span>
+        </div>
+        <div v-if="!loggedIn" class="cc-login-tip" @click="router.push('/login')">登录后查看你的环保贡献 ›</div>
+      </div>
+    </div>
+
     <van-cell-group inset title="我的订单">
       <div class="order-entries">
         <div class="oe-item" @click="router.push('/orders')"><van-icon name="balance-pay-o" size="28" color="#ffa300" /><span>待付款</span></div>
@@ -328,6 +363,24 @@ function goWithVisit(route, key) {
 .ov-badge.lv-gradient .ov-icon { background: linear-gradient(135deg, #ff0036, #a855f7, #22d3ee, #ffd700); }
 .ov-name { font-size: 12px; color: #333; }
 .ov-min { font-size: 10px; color: #999; }
+
+/* 碳足迹 (carbon footprint) — green-themed card */
+.carbon-card { margin: 12px; border-radius: 12px; padding: 16px; color: #fff; background: linear-gradient(135deg, #07c160 0%, #16a34a 60%, #15803d 100%); box-shadow: 0 4px 14px rgba(7, 193, 96, 0.3); overflow: hidden; position: relative; }
+.carbon-card::after { content: '🌳'; position: absolute; right: -10px; bottom: -18px; font-size: 90px; opacity: 0.12; pointer-events: none; }
+.cc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.cc-icon { font-size: 20px; }
+.cc-title { font-size: 16px; font-weight: bold; flex: 1; }
+.cc-points { font-size: 12px; background: rgba(255,255,255,0.22); padding: 4px 10px; border-radius: 999px; }
+.cc-points b { font-size: 14px; }
+.cc-body { position: relative; z-index: 1; }
+.cc-stat { margin-bottom: 10px; }
+.cc-num { font-size: 22px; font-weight: bold; line-height: 1.3; }
+.cc-num small { font-size: 13px; font-weight: normal; opacity: 0.9; }
+.cc-sub { font-size: 13px; opacity: 0.95; margin-top: 4px; }
+.cc-breakdown { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; opacity: 0.9; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.2); }
+.cb-sep { opacity: 0.6; }
+.cc-login-tip { font-size: 13px; margin-top: 8px; text-decoration: underline; cursor: pointer; }
+.carbon-card.cc-locked { opacity: 0.85; }
 
 /* 深色模式下的个人页样式 (scoped dark overrides) */
 :global(html.dark-mode) .growth-section { background: #2a2a2a; }

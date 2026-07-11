@@ -37,6 +37,33 @@ const gallery = computed(() => {
   if (imgs.length) return imgs
   return product.value.image ? [product.value.image] : []
 })
+// ---- 360°展示 (3D rotate placeholder) ----
+// Cycles through the gallery images every 1.5s with a rotateY 3D flip
+// animation to simulate a 360° turntable view. Requires at least 2 images;
+// a single-image product surfaces "暂无360°视图" instead.
+const rotating360 = ref(false)
+const rotateIdx = ref(0)
+// A monotonically increasing key used to restart the CSS rotateY animation on
+// each cycle (re-mounting the animated node via :key re-triggers the keyframes).
+const rotateTick = ref(0)
+let rotateTimer = null
+const rotateImage = computed(() => gallery.value[rotateIdx.value] || '')
+function startRotate360() {
+  if (gallery.value.length < 2) { showToast('暂无360°视图'); return }
+  rotating360.value = true
+  rotateIdx.value = 0
+  rotateTick.value = 0
+  // Pause the swipe autoplay by leaving it mounted but hidden; our timer drives
+  // the image cycling for the 360° turntable.
+  rotateTimer = setInterval(() => {
+    rotateIdx.value = (rotateIdx.value + 1) % gallery.value.length
+    rotateTick.value += 1
+  }, 1500)
+}
+function stopRotate360() {
+  if (rotateTimer) { clearInterval(rotateTimer); rotateTimer = null }
+  rotating360.value = false
+}
 // Review summary stats (评价概览统计): average rating, good-rate (4-5★),
 // and per-star distribution counts (index 0 = 5★ ... index 4 = 1★).
 const reviewStats = computed(() => {
@@ -529,6 +556,8 @@ function scrollToTab(key) {
 onUnmounted(() => {
   if (tabObserver) { tabObserver.disconnect(); tabObserver = null }
   if (videoObserver) { videoObserver.disconnect(); videoObserver = null }
+  // Stop the 360° turntable timer if it was running.
+  stopRotate360()
 })
 </script>
 
@@ -555,12 +584,30 @@ onUnmounted(() => {
       <!-- Play/pause indicator (briefly shows when paused by the user) -->
       <div v-if="!videoPlaying" class="pv-paused-badge" @click.stop="toggleVideoPlay">▶</div>
     </div>
-    <van-swipe class="gallery" :autoplay="3000" indicator-color="#ff0036" v-if="gallery.length > 1">
-      <van-swipe-item v-for="(img, i) in gallery" :key="i">
-        <van-image width="100%" height="375" :src="img" fit="cover" />
-      </van-swipe-item>
-    </van-swipe>
-    <van-image v-else width="100%" height="375" :src="product.image" fit="cover" />
+    <!-- 360°展示 (3D rotate placeholder): a turntable view that cycles the
+         gallery images every 1.5s with a rotateY flip. "停止旋转" exits. -->
+    <div v-if="rotating360" class="gallery-360">
+      <van-image
+        :key="rotateTick"
+        width="100%"
+        height="375"
+        :src="rotateImage"
+        fit="cover"
+        class="g360-img"
+      />
+      <div class="g360-hint">🔄 360°展示中 · {{ rotateIdx + 1 }}/{{ gallery.length }}</div>
+      <van-button class="g360-stop" size="small" round type="danger" @click="stopRotate360">停止旋转</van-button>
+    </div>
+    <template v-else>
+      <van-swipe class="gallery" :autoplay="3000" indicator-color="#ff0036" v-if="gallery.length > 1">
+        <van-swipe-item v-for="(img, i) in gallery" :key="i">
+          <van-image width="100%" height="375" :src="img" fit="cover" />
+        </van-swipe-item>
+      </van-swipe>
+      <van-image v-else width="100%" height="375" :src="product.image" fit="cover" />
+      <!-- 360° entry button (3D rotate placeholder) -->
+      <div class="gallery-360-btn" @click="startRotate360">🔄 360°</div>
+    </template>
     <div class="price-block">
       <span class="big-price">¥{{ fmt(currentPrice()) }}</span>
       <span class="origin">¥{{ fmt(product.original_price) }}</span>
@@ -1053,4 +1100,11 @@ onUnmounted(() => {
 .om-dash { width: 100%; height: 0; border-top: 3px dashed #ff0036; }
 .om-truck { position: absolute; font-size: 24px; background: #fff; padding: 0 6px; }
 .om-tip { text-align: center; font-size: 13px; color: #666; padding: 12px; background: #fff5f6; border: 1px solid #ffd6df; border-radius: 8px; line-height: 20px; }
+/* 360°展示 (3D rotate placeholder) */
+.gallery-360-btn { position: absolute; top: 56px; right: 14px; z-index: 6; background: rgba(0,0,0,0.55); color: #fff; font-size: 12px; padding: 6px 12px; border-radius: 16px; cursor: pointer; user-select: none; backdrop-filter: blur(2px); box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+.gallery-360 { position: relative; background: #000; perspective: 1000px; }
+.gallery-360 .g360-img { display: block; transform-origin: center center; animation: g360-rotatey 1.5s ease-in-out; }
+@keyframes g360-rotatey { 0% { transform: rotateY(0deg); } 100% { transform: rotateY(360deg); } }
+.g360-hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); color: #fff; font-size: 12px; background: rgba(0,0,0,0.55); padding: 4px 12px; border-radius: 12px; }
+.g360-stop { position: absolute; right: 14px; top: 14px; z-index: 7; }
 </style>
