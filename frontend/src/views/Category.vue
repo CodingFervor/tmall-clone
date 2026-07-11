@@ -68,6 +68,16 @@ function cheaperIndex() {
   if (isNaN(a) || isNaN(b) || a === b) return -1
   return a < b ? 0 : 1
 }
+
+// ---- 分类广告条 (category banner carousel) ----
+// Three demo banners from picsum. Auto-rotates every 3s; tapping a banner
+// shows a toast (tappable toast).
+const banners = [
+  { id: 0, img: 'https://picsum.photos/seed/tmall-cat-a/640/200', text: '限时满减 爆款直降' },
+  { id: 1, img: 'https://picsum.photos/seed/tmall-cat-b/640/200', text: '品质好物 新品首发' },
+  { id: 2, img: 'https://picsum.photos/seed/tmall-cat-c/640/200', text: '品牌特卖 限时抢购' },
+]
+function tapBanner(b) { showToast(b.text) }
 </script>
 
 <template>
@@ -78,6 +88,15 @@ function cheaperIndex() {
         <div v-for="c in cats" :key="c.id" class="cat-side-item" :class="{ active: activeId === c.id }" @click="activeId = c.id">{{ c.name }}</div>
       </div>
       <div class="cat-content">
+        <!-- 分类广告条 (category banner carousel) -->
+        <van-swipe class="cat-banner" :autoplay="3000" indicator-color="#ff0036" :loop="true">
+          <van-swipe-item v-for="b in banners" :key="b.id" @click="tapBanner(b)">
+            <div class="cb-slide">
+              <van-image class="cb-img" width="100%" height="120" fit="cover" radius="8" :src="b.img" />
+              <span class="cb-text">{{ b.text }}</span>
+            </div>
+          </van-swipe-item>
+        </van-swipe>
         <div class="sort-bar">
           <span :class="{ active: sortBy === 'default' }" @click="sortBy = 'default'">综合</span>
           <span :class="{ active: sortBy === 'sales' }" @click="sortBy = 'sales'">销量</span>
@@ -146,6 +165,19 @@ function cheaperIndex() {
 .cat-side-item.active { background: #fff; color: #ff0036; font-weight: bold; }
 .cat-side-item.active::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 18px; background: #ff0036; }
 .cat-content { flex: 1; background: #fff; overflow-y: auto; }
+/* 分类广告条 (category banner carousel) */
+.cat-banner { margin: 8px; border-radius: 8px; overflow: hidden; }
+.cb-slide { position: relative; cursor: pointer; }
+.cb-img { display: block; }
+.cb-text {
+  position: absolute;
+  left: 12px; bottom: 10px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+  letter-spacing: 0.5px;
+}
 .sort-bar { display: flex; background: #fff; border-bottom: 1px solid #f0f0f0; position: sticky; top: 0; z-index: 5; }
 .sort-bar span { flex: 1; text-align: center; padding: 10px 0; font-size: 13px; color: #666; }
 .sort-bar span.active { color: #ff0036; font-weight: bold; }

@@ -98,6 +98,38 @@ async function load() {
 }
 onMounted(load); onActivated(load)
 function logout() { localStorage.removeItem('tm_token'); localStorage.removeItem('tm_user'); loggedIn.value = false; user.value = null; growth.value = 0; showToast('已退出登录') }
+
+// ---- 消息红点 (notification dots) ----
+// Each tracked cell records its last-visit timestamp in localStorage. A red dot
+// shows when more than an hour has elapsed since the last visit. Visiting the
+// page clears the dot by updating the timestamp to now.
+const NOTIF_KEY = 'tm_notif_visits'
+const NOTIF_INTERVAL = 60 * 60 * 1000 // 1 hour
+// Trigger a re-render of dots when visits change so they clear immediately.
+const notifTick = ref(0)
+
+function notifVisits() {
+  try { return JSON.parse(localStorage.getItem(NOTIF_KEY) || '{}') } catch (_) { return {} }
+}
+function setNotifVisits(v) {
+  try { localStorage.setItem(NOTIF_KEY, JSON.stringify(v)) } catch (_) {}
+}
+// true when the cell should show a red dot (last visit older than 1h or never).
+function hasNotif(key) {
+  void notifTick.value // depend on tick for reactivity
+  const visits = notifVisits()
+  const last = visits[key]
+  if (!last) return true // never visited
+  return (Date.now() - last) > NOTIF_INTERVAL
+}
+// Navigate to a route and record the visit so the dot clears.
+function goWithVisit(route, key) {
+  const visits = notifVisits()
+  visits[key] = Date.now()
+  setNotifVisits(visits)
+  notifTick.value++
+  router.push(route)
+}
 </script>
 
 <template>
@@ -199,11 +231,11 @@ function logout() { localStorage.removeItem('tm_token'); localStorage.removeItem
       </div>
     </van-cell-group>
     <van-cell-group inset title="常用功能">
-      <van-cell title="购物车" :value="cartCount + '件'" is-link @click="router.push('/cart')" icon="cart-o" />
-      <van-cell title="我的订单" is-link @click="router.push('/orders')" icon="orders-o" />
+      <van-cell title="购物车" :value="cartCount + '件'" is-link class="notif-cell" :class="{ 'notif-on': hasNotif('cart') }" @click="goWithVisit('/cart', 'cart')" icon="cart-o" />
+      <van-cell title="我的订单" is-link class="notif-cell" :class="{ 'notif-on': hasNotif('orders') }" @click="goWithVisit('/orders', 'orders')" icon="orders-o" />
       <van-cell title="我的收藏" is-link @click="router.push('/favorites')" icon="star-o" />
       <van-cell title="浏览历史" is-link @click="router.push('/history')" icon="clock-o" />
-      <van-cell title="每日签到" is-link @click="router.push('/checkin')" icon="calendar-o" />
+      <van-cell title="每日签到" is-link class="notif-cell" :class="{ 'notif-on': hasNotif('checkin') }" @click="goWithVisit('/checkin', 'checkin')" icon="calendar-o" />
       <van-cell title="积分商城" is-link @click="router.push('/points-shop')" icon="gold-coin-o" />
       <van-cell title="积分抽奖" is-link @click="router.push('/lottery')" icon="gem-o" />
       <van-cell title="超值拼团" is-link @click="router.push('/group-buy')" icon="friends-o" />
@@ -211,7 +243,7 @@ function logout() { localStorage.removeItem('tm_token'); localStorage.removeItem
       <van-cell title="礼品卡" is-link @click="router.push('/gift-card')" icon="card" />
       <van-cell title="预售专区" is-link @click="router.push('/presale')" icon="underway-o" />
       <van-cell title="售后服务" is-link @click="router.push('/refunds')" icon="after-sale" />
-      <van-cell title="优惠券" is-link @click="router.push('/coupons')" icon="coupon-o" />
+      <van-cell title="优惠券" is-link class="notif-cell" :class="{ 'notif-on': hasNotif('coupons') }" @click="goWithVisit('/coupons', 'coupons')" icon="coupon-o" />
       <van-cell title="收货地址" is-link icon="location-o" @click="router.push('/addresses')" />
       <van-cell title="编辑资料" is-link icon="edit" @click="router.push('/profile')" />
       <van-cell title="我的关注" is-link icon="like-o" @click="router.push('/brands')" />
@@ -241,6 +273,23 @@ function logout() { localStorage.removeItem('tm_token'); localStorage.removeItem
 .oe-item { flex: 1; text-align: center; font-size: 12px; color: #666; }
 .oe-item span { display: block; margin-top: 4px; }
 
+/* 消息红点 (notification dots) */
+/* Render an 8px red dot in the top-right corner of a cell when its
+   notif-on class is present. Uses the free ::before pseudo-element
+   (the bottom hairline is on ::after, so they don't clash). */
+.notif-cell.notif-on :deep(::before) {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 26px;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff0036;
+  box-shadow: 0 0 0 2px rgba(255, 0, 54, 0.18);
+  z-index: 3;
+}
 /* ---- 会员成长值 (member growth chart) ---- */
 .growth-section { margin: 12px; background: #fff; border-radius: 12px; padding: 16px; }
 .growth-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }

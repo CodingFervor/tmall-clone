@@ -125,10 +125,29 @@ function reviewMedia(r) {
   })
 }
 
+// ---- 比价悬浮球 (price track floating ball) ----
+// Remember the last viewed product in localStorage so the Home page can surface
+// a floating price-tracking ball. We store the id, name, thumb and the price at
+// the time of viewing; Home re-fetches the live price to compute the ↑↓ trend.
+const PRICE_TRACK_KEY = 'tm_price_track'
+function rememberPriceTrack(p) {
+  if (!p || !p.id) return
+  try {
+    localStorage.setItem(PRICE_TRACK_KEY, JSON.stringify({
+      id: p.id,
+      name: p.name,
+      image: p.image,
+      price: Number(p.price),
+      ts: Date.now(),
+    }))
+  } catch (_) { /* storage may be full / unavailable */ }
+}
+
 onMounted(async () => {
   try {
     const res = await getProduct(route.params.id)
     product.value = res.data
+    rememberPriceTrack(product.value)
     reviews.value = res.reviews || []
     skus.value = res.skus || []
     if (res.recommended_sku) { selectedSKU.value = res.recommended_sku; recommendedSKU.value = res.recommended_sku }

@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onActivated, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showSuccessToast, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast, showConfirmDialog, showDialog } from 'vant'
 import { getCart, updateCart, deleteCart, createOrder, getMyCoupons, getAddresses, requestInvoice, getTieredDiscounts, getProducts, addToCart, toggleFavorite } from '../api'
 
 const router = useRouter()
@@ -301,26 +301,145 @@ function saveInvoice() {
 function closeInvoiceForm() {
   showInvoiceForm.value = false
 }
+// ---- 结算错误恢复 (checkout error recovery) ----
+// When checkout fails we distinguish two failure modes:
+//  - product info changed (e.g. price/stock/selection changed server-side):
+//    show "商品信息已更新" with a Retry button.
+//  - network timeout: show "3秒后自动重试..." with a live countdown that
+//    auto-retries when it reaches 0.
+// We cap attempts at 3 (MAX_CHECKOUT_RETRIES); after that the dialog shows
+// "请联系客服". The selected-item snapshot is rebuilt from fresh cart data on
+// each retry so stale product info never gets re-submitted.
+const MAX_CHECKOUT_RETRIES = 3
+const checkoutRetries = ref(0)
+const showCheckoutError = ref(false)
+const checkoutErrorMsg = ref('')
+const checkoutIsTimeout = ref(false)
+const checkoutCountdown = ref(0)       // seconds remaining for auto-retry
+const checkoutMaxedOut = ref(false)    // all retries exhausted
+let countdownTimer = null
+
+// A network/timeout failure: axios sets err.code === 'ECONNABORTED' and there is
+// no response (the request never reached the server). Treat 5xx as transient
+// network/server errors too so the countdown auto-retry kicks in.
+function isTimeoutErr(e) {
+  if (e && (e.code === 'ECONNABORTED' || e.code === 'ETIMEDOUT')) return true
+  if (e && !e.response) return true // request never reached the server
+  const s = e && e.response && e.response.status
+  return s === 502 || s === 503 || s === 504 || s === 408
+}
+
+function clearCountdown() {
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null }
+}
+
+// Build the order payload fresh from current cart state on each attempt so we
+// always submit up-to-date product info (prices/stock/selection).
+function buildCheckoutPayload() {
+  const sel = items.value
+    .filter((i) => i.selected === 1)
+    .map((i) => ({ product_id: i.product_id, quantity: i.quantity }))
+  const a = selectedAddress.value
+  const addressText = `${a.name} ${a.phone} ${a.detail}`
+  return {
+    items: sel,
+    address: addressText,
+    user_coupon_id: selectedCouponId.value || undefined,
+    remark: remark.value,
+  }
+}
+
+async function performCheckout() {
+  const order = await createOrder(buildCheckoutPayload())
+  // Optionally request an invoice for the new order.
+  if (invoiceEnabled.value) {
+    await requestInvoice(order.id, {
+      invoice_type: invoiceType.value,
+      title: invoiceTitle.value,
+      tax_no: invoiceTaxNo.value,
+      email: invoiceEmail.value,
+    }).catch(() => {})
+  }
+  return order
+}
+
+// Core retry driver. Recurses via the auto/manual retry entry points so that
+// the retry counter, countdown and exhausted state all stay consistent.
 async function checkout() {
   if (selectedTotal.value <= 0) { showToast('请选择商品'); return }
   if (!selectedAddress.value) { showToast('请选择收货地址'); return }
-  const sel = items.value.filter((i) => i.selected === 1).map((i) => ({ product_id: i.product_id, quantity: i.quantity }))
-  const a = selectedAddress.value
-  const addressText = `${a.name} ${a.phone} ${a.detail}`
-  try {
-    const order = await createOrder({ items: sel, address: addressText, user_coupon_id: selectedCouponId.value || undefined, remark: remark.value })
-    // Optionally request an invoice for the new order.
-    if (invoiceEnabled.value) {
-      await requestInvoice(order.id, {
-        invoice_type: invoiceType.value,
-        title: invoiceTitle.value,
-        tax_no: invoiceTaxNo.value,
-        email: invoiceEmail.value,
-      }).catch(() => {})
-    }
-    showSuccessToast('下单成功'); router.push('/orders')
-  } catch (e) { showToast(e.response?.data?.error || '下单失败') }
+  // Reset retry bookkeeping for a fresh checkout attempt.
+  checkoutRetries.value = 0
+  checkoutMaxedOut.value = false
+  await runCheckoutAttempt()
 }
+
+async function runCheckoutAttempt() {
+  try {
+    showCheckoutError.value = false
+    clearCountdown()
+    const order = await performCheckout()
+    clearCountdown()
+    showSuccessToast('下单成功')
+    router.push('/orders')
+  } catch (e) {
+    handleCheckoutError(e)
+  }
+}
+
+function handleCheckoutError(e) {
+  // Reload the cart first so the dialog/retry works against fresh data.
+  load().catch(() => {})
+
+  const timeout = isTimeoutErr(e)
+  checkoutIsTimeout.value = timeout
+
+  if (checkoutRetries.value >= MAX_CHECKOUT_RETRIES) {
+    // Exhausted all retries -> contact customer service.
+    checkoutMaxedOut.value = true
+    checkoutErrorMsg.value = '多次重试失败，请联系客服'
+    clearCountdown()
+    showCheckoutError.value = true
+    return
+  }
+  checkoutRetries.value += 1
+
+  if (timeout) {
+    // Network timeout: auto-retry after a 3s countdown.
+    checkoutErrorMsg.value = '网络连接超时'
+    showCheckoutError.value = true
+    checkoutCountdown.value = 3
+    clearCountdown()
+    countdownTimer = setInterval(() => {
+      checkoutCountdown.value -= 1
+      if (checkoutCountdown.value <= 0) {
+        clearCountdown()
+        // Auto-retry without user interaction.
+        runCheckoutAttempt()
+      }
+    }, 1000)
+  } else {
+    // Product info changed (price/stock/selection) or other server error:
+    // surface "商品信息已更新" with a manual Retry button.
+    const msg = e && e.response && e.response.data && e.response.data.error
+    checkoutErrorMsg.value = msg ? `商品信息已更新：${msg}` : '商品信息已更新，请重试'
+    showCheckoutError.value = true
+  }
+}
+
+// Manual retry (Retry button in the dialog). Cancels any pending auto-countdown.
+function retryCheckout() {
+  clearCountdown()
+  showCheckoutError.value = false
+  runCheckoutAttempt()
+}
+
+function closeCheckoutError() {
+  clearCountdown()
+  showCheckoutError.value = false
+}
+
+onUnmounted(() => { clearCountdown() })
 function couponLabel(uc) {
   if (!uc.coupon) return ''
   const c = uc.coupon
@@ -523,6 +642,26 @@ function fmt(n) { return Number(n).toFixed(2) }
         </div>
       </van-popup>
     </div>
+
+    <!-- 结算错误恢复 (checkout error recovery) dialog -->
+    <van-dialog
+      v-model:show="showCheckoutError"
+      :title="checkoutMaxedOut ? '结算失败' : (checkoutIsTimeout ? '网络超时' : '商品信息已更新')"
+      :show-confirm-button="false"
+      :close-on-click-overlay="false"
+    >
+      <div class="co-error">
+        <div class="co-msg">{{ checkoutErrorMsg }}</div>
+        <div v-if="checkoutIsTimeout && !checkoutMaxedOut" class="co-countdown">{{ checkoutCountdown }}秒后自动重试...</div>
+        <div v-if="checkoutMaxedOut" class="co-countdown co-contact">请联系客服</div>
+        <div v-if="!checkoutMaxedOut" class="co-retries">剩余重试次数 {{ MAX_CHECKOUT_RETRIES - checkoutRetries }}/{{ MAX_CHECKOUT_RETRIES }}</div>
+      </div>
+      <div class="co-actions">
+        <van-button block @click="closeCheckoutError">取消</van-button>
+        <van-button v-if="checkoutMaxedOut" block type="danger" @click="showDialog({ title: '联系客服', message: '客服热线：400-888-XXXX' }); closeCheckoutError()">联系客服</van-button>
+        <van-button v-else block type="danger" @click="retryCheckout">重试</van-button>
+      </div>
+    </van-dialog>
   </div>
 </template>
 
@@ -631,4 +770,11 @@ function fmt(n) { return Number(n).toFixed(2) }
 .gb-invite-text { margin: 4px 18px 12px; padding: 12px; background: #f7f8fa; border-radius: 8px; font-size: 13px; color: #555; line-height: 20px; white-space: pre-wrap; word-break: break-all; }
 .gb-actions { display: flex; gap: 12px; padding: 0 18px; }
 .gb-demo { text-align: center; font-size: 12px; color: #ff0036; margin-top: 14px; cursor: pointer; }
+/* 结算错误恢复 (checkout error recovery) */
+.co-error { padding: 8px 20px 4px; text-align: center; }
+.co-msg { font-size: 15px; color: #333; line-height: 22px; }
+.co-countdown { font-size: 13px; color: #ff0036; margin-top: 8px; }
+.co-countdown.co-contact { font-size: 15px; font-weight: bold; }
+.co-retries { font-size: 12px; color: #999; margin-top: 6px; }
+.co-actions { display: flex; gap: 12px; padding: 16px 20px 20px; }
 </style>

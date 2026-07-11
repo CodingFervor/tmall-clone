@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
-import { getProducts, getBrands, getCategories } from '../api'
+import { getProducts, getBrands, getCategories, getProduct } from '../api'
 
 const router = useRouter()
 const products = ref([])
@@ -61,10 +61,13 @@ onMounted(async () => {
   }
   tick()
   timer = setInterval(tick, 1000)
+  // Surface the price-track floating ball (比价悬浮球) after content loads.
+  loadPriceTrack()
 })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
   if (flashTimer) clearTimeout(flashTimer)
+  if (longPressTimer) clearTimeout(longPressTimer)
 })
 function fmt(n) { return Number(n).toFixed(2) }
 
@@ -126,7 +129,80 @@ const marqueeTrack = computed(() => [...marqueeMessages, ...marqueeMessages])
 function tapMarquee(msg) {
   showToast(msg.replace(/[🎉📦⚡🎁💎]/g, '').trim())
 }
-</script>
+
+// ---- 比价悬浮球 (price track floating ball) ----
+// Shows the last viewed product (saved from ProductDetail) as a 48px floating
+// ball. We re-fetch the live price and compare it to the stored price to render
+// an ↑/↓ trend indicator. Tap routes to the product detail; a long-press
+// (touch hold / mouse hold for 500ms) dismisses it for this session.
+const PRICE_TRACK_KEY = 'tm_price_track'
+const PRICE_TRACK_DISMISS_KEY = 'tm_price_track_dismissed'
+const priceTrack = ref(null)        // { id, name, image, price(stored), ts }
+const livePrice = ref(null)         // current price re-fetched from the API
+const ballHidden = ref(true)        // whether to show the ball
+let longPressTimer = null
+
+// Trend: 1 = price went up, -1 = went down, 0 = unchanged.
+const priceTrend = computed(() => {
+  if (priceTrack.value == null || livePrice.value == null) return 0
+  const diff = Number(livePrice.value) - Number(priceTrack.value.price)
+  if (diff > 0) return 1
+  if (diff < 0) return -1
+  return 0
+})
+
+async function loadPriceTrack() {
+  // Respect a per-session dismissal.
+  if (localStorage.getItem(PRICE_TRACK_DISMISS_KEY) === '1') { ballHidden.value = true; return }
+  let raw = null
+  try { raw = localStorage.getItem(PRICE_TRACK_KEY) } catch (_) { return }
+  if (!raw) { ballHidden.value = true; return }
+  let parsed = null
+  try { parsed = JSON.parse(raw) } catch (_) { return }
+  if (!parsed || !parsed.id) { ballHidden.value = true; return }
+  priceTrack.value = parsed
+  ballHidden.value = false
+  // Fetch the live price for the trend indicator.
+  try {
+    const res = await getProduct(parsed.id)
+    if (res && res.data) {
+      livePrice.value = Number(res.data.price)
+      // Keep the stored price in sync so the trend reflects the latest snapshot.
+      try {
+        localStorage.setItem(PRICE_TRACK_KEY, JSON.stringify({
+          id: parsed.id, name: parsed.name, image: parsed.image,
+          price: Number(res.data.price), ts: Date.now(),
+        }))
+      } catch (_) { /* ignore */ }
+    }
+  } catch (_) {
+    // Network failure: fall back to the stored price (no trend shown).
+    livePrice.value = Number(parsed.price)
+  }
+}
+function displayPrice() {
+  return livePrice.value != null ? livePrice.value : (priceTrack.value ? priceTrack.value.price : 0)
+}
+function tapBall() {
+  if (priceTrack.value) router.push('/product/' + priceTrack.value.id)
+}
+function startLongPress(e) {
+  if (longPressTimer) clearTimeout(longPressTimer)
+  longPressTimer = setTimeout(() => {
+    longPressTimer = null
+    dismissBall()
+    // Prevent the pending click that follows a touch-hold from navigating.
+    if (e && e.preventDefault) e.preventDefault()
+  }, 500)
+}
+function cancelLongPress() {
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null }
+}
+function dismissBall() {
+  ballHidden.value = true
+  try { localStorage.setItem(PRICE_TRACK_DISMISS_KEY, '1') } catch (_) {}
+  showToast('已移除比价悬浮球')
+}</script>
 
 <template>
   <div class="home">
@@ -269,6 +345,25 @@ function tapMarquee(msg) {
         </div>
       </div>
     </div>
+
+    <!-- 比价悬浮球 (price track floating ball) -->
+    <div
+      v-if="!ballHidden && priceTrack"
+      class="price-ball"
+      @click="tapBall"
+      @touchstart.passive="startLongPress"
+      @touchend="cancelLongPress"
+      @touchmove="cancelLongPress"
+      @touchcancel="cancelLongPress"
+      @mousedown="startLongPress"
+      @mouseup="cancelLongPress"
+      @mouseleave="cancelLongPress"
+    >
+      <van-image class="pb-thumb" fit="cover" radius="6" :src="priceTrack.image" />
+      <span class="pb-price">¥{{ fmt(displayPrice()) }}</span>
+      <span v-if="priceTrend > 0" class="pb-trend pb-up">↑</span>
+      <span v-else-if="priceTrend < 0" class="pb-trend pb-down">↓</span>
+    </div>
   </div>
 </template>
 
@@ -396,4 +491,53 @@ function tapMarquee(msg) {
   user-select: none;
 }
 .tag-chip:active { transform: scale(0.94); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); }
+
+/* 比价悬浮球 (price track floating ball) */
+.price-ball {
+  position: fixed;
+  right: 16px;
+  bottom: 80px;
+  z-index: 50;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.pb-thumb { width: 100%; height: 100%; }
+.pb-price {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  background: rgba(255, 0, 54, 0.92);
+  color: #fff;
+  font-size: 9px;
+  font-weight: bold;
+  line-height: 14px;
+  text-align: center;
+  padding: 1px 0;
+}
+.pb-trend {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  border: 1.5px solid #fff;
+}
+.pb-up { background: #ff0036; }
+.pb-down { background: #07c160; }
 </style>
