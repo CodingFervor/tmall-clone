@@ -141,6 +141,12 @@ function clearHistory() {
   history.value = []
   localStorage.removeItem(HISTORY_KEY)
 }
+// 单条历史删除 (individual history delete): remove one term by its name.
+function removeHistory(term) {
+  history.value = history.value.filter((x) => x.term !== term)
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.value))
+  showToast('已删除')
+}
 function fmt(n) { return Number(n).toFixed(2) }
 </script>
 
@@ -188,7 +194,7 @@ function fmt(n) { return Number(n).toFixed(2) }
             :class="{ recent: h.recent }"
             :style="{ fontSize: h.size + 'px', color: h.color }"
             @click="doSearch(h.term)"
-          >{{ h.term }}<sup class="cloud-count">{{ h.count }}</sup></span>
+          >{{ h.term }}<sup class="cloud-count">{{ h.count }}</sup><span class="cloud-del" @click.stop="removeHistory(h.term)">✕</span></span>
         </div>
       </div>
       <div class="hot">
@@ -256,6 +262,9 @@ function fmt(n) { return Number(n).toFixed(2) }
 .cloud-tag { cursor: pointer; user-select: none; font-weight: bold; transition: transform 0.15s, opacity 0.15s; word-break: break-all; }
 .cloud-tag:active { transform: scale(1.1); opacity: 0.75; }
 .cloud-count { font-size: 9px; font-weight: normal; color: #999; margin-left: 1px; vertical-align: super; }
+/* 单条历史删除 (individual history delete) */
+.cloud-del { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 4px; font-size: 11px; font-weight: normal; color: #fff; background: #ff0036; border-radius: 50%; line-height: 1; vertical-align: middle; cursor: pointer; user-select: none; transition: transform 0.15s; }
+.cloud-del:active { transform: scale(1.2); }
 .res-item { display: flex; gap: 10px; padding: 10px; background: #fff; border-bottom: 1px solid #f5f5f5; }
 .ri-info { flex: 1; }
 .ri-name { font-size: 13px; line-height: 18px; }

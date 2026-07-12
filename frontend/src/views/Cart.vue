@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onActivated, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onActivated, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showConfirmDialog, showDialog } from 'vant'
 import { getCart, updateCart, deleteCart, createOrder, getMyCoupons, getAddresses, requestInvoice, getTieredDiscounts, getProducts, addToCart, toggleFavorite, getCheckInStatus } from '../api'
@@ -13,6 +13,25 @@ const coupons = ref([])
 const selectedCouponId = ref(null)
 const showCouponPicker = ref(false)
 const remark = ref('')
+// ---- 感谢快递员小费 (checkout courier tip) ----
+// Three quick-tip buttons (¥1/¥3/¥5) append a "💰感谢快递员 ¥N" line to the order
+// remark so it travels with the order. Tapping the active tip removes it.
+const TIP_AMOUNTS = [1, 3, 5]
+const selectedTip = ref(0)
+function applyTip(amount) {
+  // Strip any previously-appended tip line so we don't stack duplicates.
+  const base = remark.value.replace(/\s*💰感谢快递员\s*¥\d+\s*/g, '').trim()
+  if (selectedTip.value === amount) {
+    // Tapping the active tip toggles it off.
+    selectedTip.value = 0
+    remark.value = base
+    showToast('已取消打赏')
+    return
+  }
+  selectedTip.value = amount
+  remark.value = (base ? base + ' ' : '') + `💰感谢快递员 ¥${amount}`
+  showToast(`已添加打赏 ¥${amount}`)
+}
 // Recommended products (猜你喜欢).
 const recommendations = ref([])
 // Address picker (收货地址).
@@ -81,6 +100,39 @@ const discount = computed(() => {
   if (!uc || !uc.coupon) return 0
   if (uc.coupon.coupon_type === 'discount') return Math.round(selectedTotal.value * (1 - uc.coupon.value) * 100) / 100
   return uc.coupon.value
+})
+// ---- 最佳优惠券自动选用 (best coupon auto-apply) ----
+// Compute the discount a usable coupon yields against the current subtotal so we
+// can rank them. Discount-type coupons take a percentage off; fixed coupons
+// subtract their face value. Returns 0 when the coupon can't be evaluated.
+function couponDiscount(uc) {
+  if (!uc || !uc.coupon) return 0
+  if (uc.coupon.coupon_type === 'discount') return Math.round(selectedTotal.value * (1 - uc.coupon.value) * 100) / 100
+  return uc.coupon.value
+}
+// The usable coupon with the largest discount (ties broken by id for stability).
+const bestCoupon = computed(() => {
+  const list = usableCoupons.value
+  if (!list.length) return null
+  return list.reduce((best, uc) => (couponDiscount(uc) > couponDiscount(best) ? uc : best), list[0])
+})
+// Auto-select the best coupon whenever the usable set changes (e.g. after the
+// cart loads or the subtotal crosses a threshold). Only fires a toast the first
+// time per cart load to avoid spamming on every selection toggle; we track the
+// last subtotal+coupon signature we announced.
+let lastAutoApplySig = ''
+watch(bestCoupon, (best) => {
+  if (!best) return
+  // Signature guards against re-announcing for the same effective state.
+  const sig = selectedTotal.value + ':' + best.id
+  // Only auto-apply (and announce) when the user hasn't manually picked one
+  // OR their pick is no longer the best value.
+  if (selectedCouponId.value === best.id) { lastAutoApplySig = sig; return }
+  selectedCouponId.value = best.id
+  if (lastAutoApplySig !== sig) {
+    lastAutoApplySig = sig
+    showSuccessToast('已自动选用最佳优惠')
+  }
 })
 const finalTotal = computed(() => Math.max(0, selectedTotal.value - discount.value))
 const selectedCount = computed(() => items.value.filter((i) => i.selected === 1).length)
@@ -764,6 +816,19 @@ const isHeavyOrder = computed(() => estimatedWeight.value > 10)
         style="margin-top: 8px"
       />
       <van-field v-model="remark" label="订单备注" placeholder="选填，如送货时间、发票等" style="margin-top: 8px" />
+      <!-- 感谢快递员小费 (checkout courier tip): quick-tip buttons → remark -->
+      <div class="tip-row">
+        <span class="tip-label">💰 感谢快递员</span>
+        <div class="tip-btns">
+          <span
+            v-for="amt in TIP_AMOUNTS"
+            :key="amt"
+            class="tip-btn"
+            :class="{ active: selectedTip === amt }"
+            @click="applyTip(amt)"
+          >¥{{ amt }}</span>
+        </div>
+      </div>
       <!-- Address picker (收货地址) -->
       <van-cell
         title="收货地址"
@@ -998,6 +1063,13 @@ const isHeavyOrder = computed(() => estimatedWeight.value > 10)
 .ci-bottom { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .ci-bottom .price { font-size: 16px; flex: 1; }
 .discount-line { color: #ff0036; font-size: 13px; text-align: right; padding: 6px 16px; background: #fff; }
+/* 感谢快递员小费 (checkout courier tip) */
+.tip-row { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #fff; margin-top: 8px; }
+.tip-label { font-size: 13px; color: #333; flex-shrink: 0; }
+.tip-btns { display: flex; gap: 8px; }
+.tip-btn { font-size: 13px; font-weight: bold; color: #ff0036; background: #fff5f6; border: 1px solid #ffd6df; border-radius: 999px; padding: 5px 16px; cursor: pointer; user-select: none; transition: all 0.15s; }
+.tip-btn:active { transform: scale(0.94); }
+.tip-btn.active { background: #ff0036; color: #fff; border-color: #ff0036; box-shadow: 0 2px 6px rgba(255, 0, 54, 0.3); }
 .tier-banner { display: flex; align-items: center; gap: 8px; background: linear-gradient(90deg, #fff0f3, #fff6e6); color: #ff0036; font-size: 12px; padding: 8px 12px; margin: 8px 0; border-radius: 8px; line-height: 18px; }
 .tier-icon { font-size: 14px; }
 .tier-summary { flex: 1; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

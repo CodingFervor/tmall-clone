@@ -25,13 +25,107 @@ async function load() {
 }
 onMounted(load)
 
+// ---- 兑换老虎机动画 (slot-machine spin before reveal) ----
+// On redeem we show a 3-column slot machine that spins, then stops column by
+// column left→right, before revealing the result. The columns cycle emoji
+// symbols during the spin (a fast CSS blur), then each locks onto the gift 🎁.
+const SLOT_SYMBOLS = ['🎁', '⭐', '💎', '🎉', '🍀']
+// Per-column spin state: the landed symbol index (null while still spinning).
+const slotCols = ref([null, null, null])
+const slotReels = ref([[], [], []])   // rendered symbols per column
+const slotOffsets = ref([0, 0, 0])    // translateY offset (in symbol heights)
+const showSlot = ref(false)           // controls the slot popup
+const slotSpinning = ref(false)
+const slotResult = ref(null)          // the product being redeemed, for the reveal
+const slotError = ref('')             // non-empty when the redeem failed
+let spinTimers = []
+
+// Build a repeating strip that ends on the target symbol.
+function buildReel(targetIdx, length) {
+  const reel = []
+  for (let i = 0; i < length; i++) {
+    reel.push((Math.floor(Math.random() * SLOT_SYMBOLS.length) + i) % SLOT_SYMBOLS.length)
+  }
+  reel[length - 1] = targetIdx // force the final cell to the target
+  return reel
+}
+function stopColumn(c) {
+  const reel = slotReels.value[c]
+  slotOffsets.value[c] = reel.length - 1
+  slotCols.value[c] = reel[reel.length - 1]
+  if (slotCols.value.every((v) => v !== null)) {
+    slotSpinning.value = false
+    revealSlot()
+  }
+}
+// Start the spin with a target of all-🎁 (index 0) for a celebratory reveal.
+function startSlotSpin() {
+  slotSpinning.value = true
+  slotResult.value = null
+  slotError.value = ''
+  const target = 0 // 🎁
+  for (let c = 0; c < 3; c++) {
+    slotCols.value[c] = null
+    const len = 20 + c * 4 // outer columns spin a bit longer
+    slotReels.value[c] = buildReel(target, len)
+    slotOffsets.value[c] = 0
+  }
+  for (let c = 0; c < 3; c++) {
+    spinTimers.push(setTimeout(() => stopColumn(c), 700 + c * 600))
+  }
+}
+function closeSlot() {
+  spinTimers.forEach((t) => clearTimeout(t))
+  spinTimers = []
+  slotSpinning.value = false
+  showSlot.value = false
+}
+async function revealSlot() {
+  // After the reels settle, surface the outcome (success or error) and reload.
+  if (slotError.value) {
+    showToast(slotError.value)
+  } else {
+    showSuccessToast('兑换成功')
+  }
+  await load()
+  // Keep the popup open a beat so the user sees the result, then auto-close.
+  setTimeout(() => { showSlot.value = false }, 1200)
+}
+
 async function redeem(p) {
   try {
     await showConfirmDialog({ title: '确认兑换', message: `兑换「${p.name}」将扣除 ${p.points} 积分？` })
-    const res = await redeemPoints(p.id)
-    points.value = res.points
-    showSuccessToast('兑换成功')
-    await load()
+    // Open the slot machine and kick off the spin immediately; the API call runs
+    // in parallel so the spin and the network request resolve together.
+    slotResult.value = p
+    slotError.value = ''
+    showSlot.value = true
+    startSlotSpin()
+    try {
+      const res = await redeemPoints(p.id)
+      points.value = res.points
+      // The spin will resolve on its own; nothing to do here on success.
+    } catch (e) {
+      // Record the error so revealSlot() surfaces it once the reels stop.
+      slotError.value = (e && e.response && e.response.data && e.response.data.error) || '兑换失败'
+      // Cancel the remaining stop timers so we don't show a false success.
+      spinTimers.forEach((t) => clearTimeout(t))
+      spinTimers = []
+      // Force the reels to settle immediately on the error.
+      for (let c = 0; c < 3; c++) {
+        if (slotCols.value[c] === null) {
+          const reel = slotReels.value[c]
+          if (reel && reel.length) {
+            slotOffsets.value[c] = reel.length - 1
+            slotCols.value[c] = reel[reel.length - 1]
+          } else {
+            slotCols.value[c] = 0
+          }
+        }
+      }
+      slotSpinning.value = false
+      revealSlot()
+    }
   } catch (e) {
     if (e && e.message !== 'cancel' && e !== 'cancel') {
       showToast(e.response?.data?.error || '兑换失败')
@@ -75,6 +169,35 @@ async function redeem(p) {
         </div>
       </div>
     </template>
+
+    <!-- 兑换老虎机动画 (slot-machine spin before reveal) -->
+    <van-popup v-model:show="showSlot" round closeable close-icon-position="top-right" :style="{ width: '86%' }" :close-on-click-overlay="false">
+      <div class="slot-popup">
+        <div class="slot-hero">
+          <div class="slot-title">🎁 积分兑换</div>
+          <div class="slot-sub">{{ slotSpinning ? '正在兑换...' : (slotError ? '兑换失败' : '兑换成功') }}</div>
+        </div>
+        <!-- 3-column slot machine -->
+        <div class="slot-machine">
+          <div v-for="(reel, c) in slotReels" :key="c" class="slot-col">
+            <div
+              class="slot-strip"
+              :class="{ 'slot-spinning': slotSpinning && slotCols[c] === null, 'slot-stopped': slotCols[c] !== null }"
+              :style="{ transform: `translateY(-${slotOffsets[c] * (100 / (reel.length || 1))}%)` }"
+            >
+              <div v-for="(sym, r) in reel" :key="r" class="slot-symbol">{{ SLOT_SYMBOLS[sym] }}</div>
+            </div>
+          </div>
+        </div>
+        <div v-if="slotResult && !slotSpinning" class="slot-reveal" :class="{ 'reveal-error': slotError }">
+          <template v-if="!slotError">🎉 恭喜兑换「{{ slotResult.name }}」</template>
+          <template v-else>😅 {{ slotError }}</template>
+        </div>
+        <div v-if="!slotSpinning" class="slot-actions">
+          <van-button block round type="danger" @click="closeSlot">完成</van-button>
+        </div>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -96,4 +219,20 @@ async function redeem(p) {
 .ri-name { font-size: 14px; }
 .ri-time { font-size: 11px; color: #999; margin-top: 2px; }
 .ri-cost { color: #ff0036; font-size: 14px; font-weight: bold; }
+/* 兑换老虎机动画 (slot-machine spin before reveal) */
+.slot-popup { padding: 0 0 18px; overflow: hidden; }
+.slot-hero { background: linear-gradient(135deg, #ff0036 0%, #ff5577 50%, #ffb347 100%); color: #fff; padding: 22px 18px 16px; text-align: center; }
+.slot-title { font-size: 20px; font-weight: bold; letter-spacing: 0.5px; }
+.slot-sub { font-size: 13px; opacity: 0.95; margin-top: 6px; }
+.slot-machine { display: flex; gap: 8px; justify-content: center; margin: 20px 16px; background: #222; border-radius: 12px; padding: 10px; box-shadow: inset 0 2px 8px rgba(0,0,0,0.5); }
+.slot-col { width: 64px; height: 64px; overflow: hidden; border-radius: 8px; background: #fff; position: relative; }
+.slot-symbol { height: 64px; line-height: 64px; text-align: center; font-size: 38px; }
+.slot-strip { will-change: transform; }
+.slot-strip.slot-spinning { animation: slot-spin 0.12s steps(1) infinite; }
+.slot-strip.slot-stopped { transition: transform 0.5s cubic-bezier(0.15, 0.85, 0.25, 1); }
+@keyframes slot-spin { 0% { transform: translateY(0); } 100% { transform: translateY(-64px); } }
+.slot-reveal { text-align: center; font-size: 16px; font-weight: bold; color: #ff0036; padding: 4px 0 12px; animation: slot-pop 0.4s ease; }
+.slot-reveal.reveal-error { color: #999; }
+@keyframes slot-pop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.15); } 100% { transform: scale(1); opacity: 1; } }
+.slot-actions { padding: 0 18px; }
 </style>

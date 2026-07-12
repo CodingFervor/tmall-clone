@@ -121,6 +121,21 @@ async function onSelectRefundType(action) {
 function statusText(s) { return { pending: '待付款', paid: '已付款', shipped: '已发货', completed: '已完成', cancelled: '已取消' }[s] || s }
 function fmt(n) { return Number(n).toFixed(2) }
 function parseItems(json) { try { return JSON.parse(json) } catch { return [] } }
+// ---- 物流追踪迷你条 (express tracking mini) ----
+// For shipped orders we show a compact 📦🚚✈️ progress strip plus a masked
+// tracking number. There's no per-order tracking field on the order list, so we
+// derive a stable pseudo tracking number from the order id: "TM" prefix, the
+// middle digits replaced with "****", keeping the last 4. The same order always
+// renders the same number.
+function maskedTracking(o) {
+  const seed = String(o.order_no || o.id || '')
+  // Take only digits; pad if too short so we always have a tail to show.
+  const digits = (seed.replace(/\D/g, '') || '0').padEnd(8, '0')
+  const tail = digits.slice(-4)
+  return 'TM****' + tail
+}
+// Whether the compact tracking strip should render: shipped or delivered orders.
+function showTrackingMini(o) { return o.status === 'shipped' || o.status === 'completed' }
 
 // ---- 评价提醒 (review reminder) ----
 // Completed orders that the user hasn't yet reviewed surface a pulsing
@@ -343,6 +358,12 @@ function downloadInvoice(o) {
           <van-button size="mini" type="danger" round class="rr-go" @click="goReview(o)">去评价</van-button>
         </div>
         <div v-if="o.status === 'pending'" class="o-countdown" :class="{ 'timed-out': isTimedOut(o) }">{{ countdown(o) }}</div>
+        <!-- 物流追踪迷你条 (express tracking mini): 📦🚚✈️ + masked tracking number -->
+        <div v-if="showTrackingMini(o)" class="track-mini" @click="viewLogistics(o)">
+          <span class="tm-emojis"><span class="tm-emoji">📦</span><span class="tm-emoji">🚚</span><span class="tm-emoji">✈️</span></span>
+          <span class="tm-no">运单号: {{ maskedTracking(o) }}</span>
+          <span class="tm-go">查看物流 ›</span>
+        </div>
         <!-- Multi-package shipment (拆包发货): when an order spans 2+ shops, show per-package groups. -->
         <template v-if="packagesOf(o).length >= 2">
           <div v-for="(pkg, pi) in packagesOf(o)" :key="pi" class="pkg-block">
@@ -411,6 +432,15 @@ function downloadInvoice(o) {
 .o-head { display: flex; justify-content: space-between; font-size: 12px; color: #999; margin-bottom: 8px; }
 .o-status { color: #ff0036; }
 .o-countdown { color: #ff0036; font-size: 13px; font-weight: bold; margin-bottom: 8px; }
+/* 物流追踪迷你条 (express tracking mini) */
+.track-mini { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 8px 12px; background: linear-gradient(90deg, #fff5f6, #eef6ff); border: 1px solid #ffd6df; border-radius: 8px; cursor: pointer; }
+.tm-emojis { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.tm-emoji { font-size: 18px; animation: tm-bob 1.6s ease-in-out infinite; }
+.tm-emoji:nth-child(2) { animation-delay: 0.2s; }
+.tm-emoji:nth-child(3) { animation-delay: 0.4s; }
+@keyframes tm-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.tm-no { flex: 1; font-size: 13px; color: #333; font-weight: bold; font-family: 'Courier New', Consolas, monospace; letter-spacing: 0.5px; }
+.tm-go { font-size: 12px; color: #ff0036; font-weight: bold; flex-shrink: 0; }
 /* 评价提醒 (review reminder): pulsing badge for unreviewed completed orders */
 .review-reminder { display: flex; align-items: center; gap: 8px; margin: 8px 0; padding: 8px 12px; background: linear-gradient(90deg, #fff5f6, #ffeef0); border: 1px solid #ffd6df; border-radius: 8px; flex-wrap: wrap; }
 .rr-badge { font-size: 13px; font-weight: bold; color: #ff0036; animation: rr-pulse 1.4s ease-in-out infinite; }

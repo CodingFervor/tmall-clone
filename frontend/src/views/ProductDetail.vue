@@ -7,6 +7,25 @@ import { getProduct, addToCart, createOrder, createReview, uploadImage, checkFav
 const route = useRoute()
 const router = useRouter()
 const product = ref(null)
+// 分享计数器 (share counter): persisted per product in localStorage so the
+// "分享N次" badge on the share button reflects how many times this product has
+// been shared from this device.
+const SHARE_COUNT_KEY = 'tm_share_count'
+const shareCount = ref(0)
+function loadShareCount() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SHARE_COUNT_KEY) || '{}')
+    shareCount.value = Number(raw[route.params.id]) || 0
+  } catch (_) { shareCount.value = 0 }
+}
+function bumpShareCount() {
+  shareCount.value += 1
+  try {
+    const raw = JSON.parse(localStorage.getItem(SHARE_COUNT_KEY) || '{}')
+    raw[route.params.id] = shareCount.value
+    localStorage.setItem(SHARE_COUNT_KEY, JSON.stringify(raw))
+  } catch (_) { /* storage may be full / unavailable */ }
+}
 const reviews = ref([])
 const skus = ref([])
 const selectedSKU = ref(null)
@@ -218,6 +237,7 @@ onMounted(async () => {
   // Floating buy bar: track scroll to reveal after the image scrolls out of view.
   window.addEventListener('scroll', onBuyBarScroll, { passive: true })
   onBuyBarScroll()
+  loadShareCount()
   try {
     const res = await getProduct(route.params.id)
     product.value = res.data
@@ -344,6 +364,8 @@ async function doUseful(r) {
 }
 function qrPattern(n) { const row = Math.floor((n - 1) / 8); const col = (n - 1) % 8; const corner = (row < 2 || row > 5) && (col < 2 || col > 5); return corner || ((row * 7 + col * 3 + n) % 3 === 0) }
 async function copyShareLink() { try { await navigator.clipboard.writeText(window.location.href); showSuccessToast('链接已复制') } catch (e) { showToast('复制失败') } }
+// 分享计数器 (share counter): bump the per-product count and open the share poster.
+function openShare() { bumpShareCount(); showPoster.value = true }
 // 分享卡片 (product share card): "复制商品信息" copies a formatted summary
 // (name, spec, price, shop, link) for easy pasting into chat. "生成长图" is a
 // lightweight demo that confirms the long-image generation (no canvas dependency).
@@ -893,7 +915,7 @@ onUnmounted(() => {
     </div>
     <van-action-bar>
       <van-action-bar-icon icon="chat-o" text="客服" @click="showToast('客服功能为演示')" />
-      <van-action-bar-icon icon="share-o" text="分享" @click="showPoster = true" />
+      <van-action-bar-icon icon="share-o" :text="'分享' + shareCount + '次'" @click="openShare" />
       <van-action-bar-icon :icon="favorited ? 'star' : 'star-o'" :text="favorited ? '已收藏' : '收藏'" :color="favorited ? '#ff0036' : '#323233'" @click="doFavorite" />
       <van-action-bar-icon icon="cart-o" text="购物车" @click="router.push('/cart')" />
       <van-action-bar-button color="#ffa300" type="warning" text="加入购物车" @click="doAddCart" />

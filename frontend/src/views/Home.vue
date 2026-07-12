@@ -87,6 +87,16 @@ function isPriceDrop(p) {
 }
 function isSeckill(p) { return !!(p && p.is_seckill) }
 function isGenuine(p) { return !!(p && p.is_genuine) }
+// ---- 限量抢购闪烁 (limited stock flash) ----
+// Products with fewer than 10 units left surface a red, pulsing "⚡仅剩N件" badge
+// to create urgency. Stock of 0 (or missing) is treated as "not low stock" so we
+// don't badge out-of-stock items here (they're better handled elsewhere).
+function lowStock(p) {
+  const s = Number(p && p.stock)
+  if (!s || s <= 0) return null
+  if (s < 10) return s
+  return null
+}
 
 // ---- 分类图标美化 (category icon gradients + ripple) ----
 // Each category icon gets a soft circular gradient backdrop. A pool of
@@ -377,6 +387,8 @@ const weather = computed(() => {
       <div v-else class="product-grid" :class="{ 'fade-in': contentReady }">
         <div v-for="p in products" :key="p.id" class="product-card" @click="router.push('/product/' + p.id)">
           <div class="new-badge" v-if="isNew(p)">NEW</div>
+          <!-- 限量抢购闪烁 (limited stock flash): red pulsing "⚡仅剩N件" badge -->
+          <div v-if="lowStock(p) !== null" class="low-stock-badge">⚡仅剩{{ lowStock(p) }}件</div>
           <van-image width="100%" height="170" :src="p.image" fit="cover" radius="6" />
           <div class="p-name van-multi-ellipsis--l2">{{ p.name }}</div>
           <div class="p-shop van-ellipsis">{{ p.shop }}</div>
@@ -500,6 +512,9 @@ const weather = computed(() => {
 .product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .product-card { background: #fafafa; border-radius: 8px; overflow: hidden; padding-bottom: 6px; position: relative; }
 .new-badge { position: absolute; top: 6px; left: 6px; z-index: 5; background: #ff0036; color: #fff; font-size: 11px; font-weight: bold; line-height: 1; padding: 3px 7px; border-radius: 999px; box-shadow: 0 1px 4px rgba(255, 0, 54, 0.45); letter-spacing: 0.5px; }
+/* 限量抢购闪烁 (limited stock flash): red pulsing badge */
+.low-stock-badge { position: absolute; top: 6px; right: 6px; z-index: 5; background: #ff0036; color: #fff; font-size: 11px; font-weight: bold; line-height: 1; padding: 4px 8px; border-radius: 999px; box-shadow: 0 1px 6px rgba(255, 0, 54, 0.55); animation: ls-flash 0.9s ease-in-out infinite; }
+@keyframes ls-flash { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.92); } }
 .p-tag { padding: 2px 6px; }
 .p-name { font-size: 13px; line-height: 18px; padding: 0 6px; height: 36px; }
 .p-shop { font-size: 11px; color: #999; padding: 0 6px; }

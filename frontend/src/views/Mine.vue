@@ -192,10 +192,58 @@ function goWithVisit(route, key) {
   router.push(route)
 }
 function fmt(n) { return Number(n || 0).toFixed(2) }
+
+// ---- 生日卡片 (birthday card) ----
+// Reads the user's birthday from localStorage 'tm_birthday' (format MM-DD,
+// MM/DD, or YYYY-MM-DD — we only use the month & day). When it matches today,
+// a festive "🎂生日快乐" card is shown. `setBirthday` is a demo helper for users
+// who haven't set one yet so they can see the effect.
+const BIRTHDAY_KEY = 'tm_birthday'
+const isBirthday = computed(() => {
+  const raw = localStorage.getItem(BIRTHDAY_KEY)
+  if (!raw) return false
+  // Accept MM-DD, MM/DD, and YYYY-MM-DD; take the trailing MM-DD.
+  const parts = raw.trim().split(/[-/]/)
+  const md = parts.length >= 2 ? parts.slice(-2) : parts
+  const m = Number(md[0])
+  const d = Number(md[1])
+  if (!m || !d) return false
+  const now = new Date()
+  return now.getMonth() + 1 === m && now.getDate() === d
+})
+function setBirthday() {
+  const raw = window.prompt('请输入你的生日（格式：MM-DD，例如 06-15）')
+  if (!raw || !raw.trim()) return
+  const val = raw.trim()
+  // Basic validation: a MM-DD-ish or YYYY-MM-DD string.
+  const parts = val.split(/[-/]/)
+  const md = parts.length >= 2 ? parts.slice(-2) : parts
+  const m = Number(md[0])
+  const d = Number(md[1])
+  if (!m || !d || m < 1 || m > 12 || d < 1 || d > 31) { showToast('格式不正确，请使用 MM-DD'); return }
+  localStorage.setItem(BIRTHDAY_KEY, val)
+  // Force reactivity: computed reads localStorage at evaluation; bump by toggling
+  // growth (a cheap re-render trigger) is overkill, so we re-read via a tick by
+  // nudging notifTick which the template also depends on.
+  notifTick.value++
+  showToast(isBirthday.value ? '🎂 生日快乐！' : '已保存，生日当天将收到祝福')
+}
 </script>
 
 <template>
   <div class="mine-page">
+    <!-- 生日卡片 (birthday card): shown when tm_birthday matches today -->
+    <div v-if="isBirthday" class="birthday-card">
+      <div class="bday-content">
+        <span class="bday-cake">🎂</span>
+        <div class="bday-text">
+          <div class="bday-title">生日快乐！</div>
+          <div class="bday-sub">天猫祝你生日快乐，愿你拥有美好的一天 🎁</div>
+        </div>
+        <span class="bday-confetti">🎉</span>
+      </div>
+      <div class="bday-gift">专属生日礼包已到账，立即去积分商城看看 ›</div>
+    </div>
     <div class="mine-header">
       <div class="header-row">
         <div v-if="loggedIn && user" class="user-info">
@@ -362,6 +410,7 @@ function fmt(n) { return Number(n || 0).toFixed(2) }
       <van-cell title="优惠券" is-link class="notif-cell" :class="{ 'notif-on': hasNotif('coupons') }" @click="goWithVisit('/coupons', 'coupons')" icon="coupon-o" />
       <van-cell title="收货地址" is-link icon="location-o" @click="router.push('/addresses')" />
       <van-cell title="编辑资料" is-link icon="edit" @click="router.push('/profile')" />
+      <van-cell title="我的生日" is-link icon="gift-o" @click="setBirthday" />
       <van-cell title="我的关注" is-link icon="like-o" @click="router.push('/brands')" />
       <van-cell title="88VIP" is-link icon="diamond-o" @click="showToast('演示功能')" />
       <van-cell title="管理后台" is-link @click="router.push('/admin')" icon="setting-o" />
@@ -372,6 +421,17 @@ function fmt(n) { return Number(n || 0).toFixed(2) }
 
 <style scoped>
 .mine-page { min-height: 100vh; padding-bottom: 20px; }
+/* 生日卡片 (birthday card) */
+.birthday-card { margin: 8px; border-radius: 12px; overflow: hidden; background: linear-gradient(135deg, #ff0036 0%, #ff5577 50%, #ffb347 100%); color: #fff; box-shadow: 0 4px 14px rgba(255, 0, 54, 0.3); }
+.bday-content { display: flex; align-items: center; gap: 12px; padding: 16px; }
+.bday-cake { font-size: 40px; line-height: 1; animation: bday-bounce 1.4s ease-in-out infinite; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); }
+@keyframes bday-bounce { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
+.bday-text { flex: 1; }
+.bday-title { font-size: 20px; font-weight: bold; letter-spacing: 1px; }
+.bday-sub { font-size: 12px; opacity: 0.95; margin-top: 4px; line-height: 18px; }
+.bday-confetti { font-size: 24px; animation: bday-spin 2s linear infinite; }
+@keyframes bday-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.bday-gift { padding: 10px 16px; background: rgba(0, 0, 0, 0.12); font-size: 12px; line-height: 18px; }
 .mine-header { background: linear-gradient(135deg, #ff0036, #ff5577); padding: 30px 20px; color: #fff; }
 .header-row { display: flex; align-items: center; justify-content: space-between; }
 .user-info { display: flex; align-items: center; gap: 14px; }
