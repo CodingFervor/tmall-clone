@@ -200,7 +200,24 @@ function rememberPriceTrack(p) {
   } catch (_) { /* storage may be full / unavailable */ }
 }
 
+// ---- 浮动购买栏 (floating buy bar) ----
+// When the user scrolls past the product image (gallery ≈ 375px + nav), a fixed
+// bottom bar slides up showing the thumbnail + price + 加购/购买 buttons, so the
+// core purchase actions stay reachable while reading the long detail page.
+const showBuyBar = ref(false)
+let buyBarSentinel = null
+let buyBarObserver = null
+// Threshold (px) below the gallery bottom; the bar appears once the user has
+// scrolled past the product images. 375 = gallery height, 46 = nav-bar height.
+const IMAGE_SCROLL_THRESHOLD = 375 + 46
+function onBuyBarScroll() {
+  showBuyBar.value = window.scrollY > IMAGE_SCROLL_THRESHOLD
+}
+
 onMounted(async () => {
+  // Floating buy bar: track scroll to reveal after the image scrolls out of view.
+  window.addEventListener('scroll', onBuyBarScroll, { passive: true })
+  onBuyBarScroll()
   try {
     const res = await getProduct(route.params.id)
     product.value = res.data
@@ -590,6 +607,8 @@ onUnmounted(() => {
   stopRotate360()
   // Stop the AR try-on init timer if it was running.
   if (arInitTimer) { clearTimeout(arInitTimer); arInitTimer = null }
+  // Floating buy bar: stop listening to scroll.
+  window.removeEventListener('scroll', onBuyBarScroll)
 })
 </script>
 
@@ -597,6 +616,19 @@ onUnmounted(() => {
   <div v-if="loading" class="loading"><van-loading /></div>
   <div v-else-if="product" class="detail">
     <van-nav-bar title="商品详情" left-arrow @click-left="router.back()" fixed placeholder />
+    <!-- 浮动购买栏 (floating buy bar): fixed bottom bar with thumbnail + price + buy.
+         Appears after the user scrolls past the product image. -->
+    <transition name="buybar-slide">
+      <div v-if="showBuyBar" class="buy-bar">
+        <van-image class="bb-thumb" width="44" height="44" radius="6" fit="cover" :src="product.image" />
+        <div class="bb-info">
+          <div class="bb-price">¥{{ fmt(currentPrice()) }}</div>
+          <div class="bb-name van-ellipsis">{{ product.name }}</div>
+        </div>
+        <van-button class="bb-cart-btn" type="warning" size="small" round @click="doAddCart">加入购物车</van-button>
+        <van-button class="bb-buy-btn" type="danger" size="small" round @click="buyNow">立即购买</van-button>
+      </div>
+    </transition>
     <!-- Product intro video (商品视频介绍) — auto-plays (muted) when ≥50% in view -->
     <div v-if="product.video_url" class="product-video">
       <video
@@ -1160,4 +1192,28 @@ onUnmounted(() => {
 @keyframes g360-rotatey { 0% { transform: rotateY(0deg); } 100% { transform: rotateY(360deg); } }
 .g360-hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); color: #fff; font-size: 12px; background: rgba(0,0,0,0.55); padding: 4px 12px; border-radius: 12px; }
 .g360-stop { position: absolute; right: 14px; top: 14px; z-index: 7; }
+/* 浮动购买栏 (floating buy bar): fixed bottom bar shown after scrolling past the image */
+.buy-bar {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  bottom: 60px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  border-radius: 24px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+.bb-thumb { flex-shrink: 0; border: 1px solid #f0f0f0; }
+.bb-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bb-price { font-size: 16px; font-weight: bold; color: #ff0036; line-height: 20px; }
+.bb-name { font-size: 11px; color: #999; }
+.bb-cart-btn { flex-shrink: 0; }
+.bb-buy-btn { flex-shrink: 0; }
+/* Slide-up transition for the floating buy bar */
+.buybar-slide-enter-active, .buybar-slide-leave-active { transition: transform 0.3s ease, opacity 0.3s ease; }
+.buybar-slide-enter-from, .buybar-slide-leave-to { transform: translateY(120%); opacity: 0; }
 </style>

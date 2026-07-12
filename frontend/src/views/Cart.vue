@@ -694,7 +694,30 @@ const isHeavyOrder = computed(() => estimatedWeight.value > 10)
       </div>
     </div>
     <div v-if="loading" class="loading"><van-loading /></div>
-    <van-empty v-else-if="!items.length" description="购物车是空的"><van-button type="danger" round @click="router.push('/home')">去逛逛</van-button></van-empty>
+    <!-- 购物车空状态 (cart empty state): animated emoji bag + 去逛逛 + recommendations -->
+    <div v-else-if="!items.length" class="cart-empty">
+      <div class="ce-bag-wrap">
+        <div class="ce-bag">🛍️</div>
+        <div class="ce-bag-shadow"></div>
+      </div>
+      <div class="ce-title">购物车空空如也</div>
+      <div class="ce-sub">还没有添加任何商品，快去挑选心仪好物吧</div>
+      <van-button class="ce-go-btn" type="danger" round icon="shop-o" @click="router.push('/home')">去逛逛</van-button>
+      <!-- 为你推荐 (recommendations when empty) -->
+      <div v-if="recommendations.length" class="ce-recommend">
+        <div class="ce-rec-head"><span class="ce-rec-line"></span><span class="ce-rec-title">为你推荐</span><span class="ce-rec-line"></span></div>
+        <div class="ce-rec-grid">
+          <div v-for="p in recommendations" :key="p.id" class="ce-rec-card" @click="router.push('/product/' + p.id)">
+            <van-image width="100%" height="120" radius="8" :src="p.image" fit="cover" />
+            <div class="ce-rec-name van-multi-ellipsis--l2">{{ p.name }}</div>
+            <div class="ce-rec-bottom">
+              <span class="ce-rec-price">¥{{ fmt(p.price) }}</span>
+              <van-button size="mini" type="danger" round @click.stop="quickAdd(p)">加入</van-button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div v-else>
       <van-swipe-cell v-for="it in items" :key="it.id">
         <div class="cart-item">
@@ -1115,4 +1138,25 @@ const isHeavyOrder = computed(() => estimatedWeight.value > 10)
   0% { opacity: 1; transform: translateY(0) rotate(0deg); }
   100% { opacity: 0; transform: translateY(105vh) rotate(720deg); }
 }
+/* 购物车空状态 (cart empty state): animated emoji bag + recommendations */
+.cart-empty { display: flex; flex-direction: column; align-items: center; padding: 48px 16px 16px; background: linear-gradient(180deg, #fff5f6 0%, #fff 220px); }
+.ce-bag-wrap { position: relative; width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; }
+.ce-bag { font-size: 88px; line-height: 1; display: inline-block; transform-origin: bottom center; animation: ce-bag-bounce 2.2s ease-in-out infinite; filter: drop-shadow(0 6px 8px rgba(255, 0, 54, 0.18)); }
+.ce-bag-shadow { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); width: 70px; height: 10px; background: rgba(0, 0, 0, 0.1); border-radius: 50%; animation: ce-shadow 2.2s ease-in-out infinite; }
+@keyframes ce-bag-bounce { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-14px) rotate(3deg); } }
+@keyframes ce-shadow { 0%, 100% { width: 70px; opacity: 0.18; } 50% { width: 46px; opacity: 0.08; } }
+.ce-title { font-size: 17px; font-weight: bold; color: #333; margin-top: 24px; }
+.ce-sub { font-size: 13px; color: #999; margin-top: 8px; text-align: center; line-height: 20px; }
+.ce-go-btn { margin-top: 18px; padding: 0 28px; height: 38px; font-size: 15px; }
+/* 为你推荐 (recommendations when empty) */
+.ce-recommend { width: 100%; margin-top: 32px; }
+.ce-rec-head { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 14px; }
+.ce-rec-line { width: 32px; height: 1px; background: #ddd; }
+.ce-rec-title { font-size: 15px; font-weight: bold; color: #333; }
+.ce-rec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ce-rec-card { background: #fff; border-radius: 10px; overflow: hidden; padding-bottom: 6px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05); cursor: pointer; transition: transform 0.15s; }
+.ce-rec-card:active { transform: scale(0.98); }
+.ce-rec-name { font-size: 13px; line-height: 18px; height: 36px; padding: 6px 8px 0; color: #333; }
+.ce-rec-bottom { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 2px; }
+.ce-rec-price { color: #ff0036; font-size: 16px; font-weight: bold; }
 </style>

@@ -35,22 +35,69 @@ applyDarkClass(darkMode.value)
 const stats = ref({ orders: 0, favorites: 0, coupons: 0, points: 0 })
 // 连续签到天数 (current check-in streak), used by the carbon-footprint card.
 const streak = ref(0)
+// Cached order list (kept for the spending-overview computation).
+const allOrders = ref([])
 async function loadStats() {
-  if (!loggedIn.value) { stats.value = { orders: 0, favorites: 0, coupons: 0, points: 0 }; return }
+  if (!loggedIn.value) { stats.value = { orders: 0, favorites: 0, coupons: 0, points: 0 }; allOrders.value = []; return }
   try {
     const [orders, favs, coupons] = await Promise.all([
       getOrders().catch(() => []),
       listFavorites().catch(() => []),
       getMyCoupons().catch(() => []),
     ])
+    allOrders.value = orders || []
     stats.value = {
-      orders: (orders || []).length,
+      orders: allOrders.value.length,
       favorites: (favs || []).length,
       coupons: (coupons || []).length,
       points: growth.value,
     }
   } catch (_) { /* stats optional */ }
 }
+
+// ---- 消费概览 (spending stats) ----
+// Derived from the cached order list. Total spent = sum of paid+ order totals
+// (exclude cancelled/pending-unpaid). Average = total / paid order count. The
+// 3-bar monthly chart compares the last three calendar months' spend.
+const SPENDING_STATUSES = ['paid', 'shipped', 'completed']
+function monthKey(d) {
+  return d.getFullYear() * 100 + (d.getMonth() + 1) // YYYYMM
+}
+function monthLabel(mk) {
+  const m = mk % 100
+  return m + '月'
+}
+const spendingStats = computed(() => {
+  const paid = allOrders.value.filter((o) => SPENDING_STATUSES.includes(o.status))
+  const total = paid.reduce((s, o) => s + (Number(o.total) || 0), 0)
+  const count = paid.length
+  const avg = count ? total / count : 0
+  // Bucket spend by YYYYMM for the last 3 months (including the current month).
+  const now = new Date()
+  const buckets = {}
+  const keys = []
+  for (let i = 2; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const k = monthKey(d)
+    buckets[k] = 0
+    keys.push(k)
+  }
+  for (const o of paid) {
+    if (!o.created_at) continue
+    const d = new Date(o.created_at)
+    if (isNaN(d.getTime())) continue
+    const k = monthKey(d)
+    if (k in buckets) buckets[k] += Number(o.total) || 0
+  }
+  const maxMonth = Math.max(1, ...keys.map((k) => buckets[k]))
+  const bars = keys.map((k) => ({
+    label: monthLabel(k),
+    value: buckets[k],
+    height: Math.round((buckets[k] / maxMonth) * 100),
+    current: k === monthKey(now),
+  }))
+  return { total, count, avg, bars }
+})
 
 // ---- 碳足迹 (carbon footprint) ----
 // Green points are earned from eco-actions: the current check-in streak and
@@ -111,7 +158,7 @@ async function load() {
   } catch (e) { loggedIn.value = false }
 }
 onMounted(load); onActivated(load)
-function logout() { localStorage.removeItem('tm_token'); localStorage.removeItem('tm_user'); loggedIn.value = false; user.value = null; growth.value = 0; streak.value = 0; showToast('已退出登录') }
+function logout() { localStorage.removeItem('tm_token'); localStorage.removeItem('tm_user'); loggedIn.value = false; user.value = null; growth.value = 0; streak.value = 0; allOrders.value = []; stats.value = { orders: 0, favorites: 0, coupons: 0, points: 0 }; showToast('已退出登录') }
 
 // ---- 消息红点 (notification dots) ----
 // Each tracked cell records its last-visit timestamp in localStorage. A red dot
@@ -144,6 +191,7 @@ function goWithVisit(route, key) {
   notifTick.value++
   router.push(route)
 }
+function fmt(n) { return Number(n || 0).toFixed(2) }
 </script>
 
 <template>
@@ -255,6 +303,39 @@ function goWithVisit(route, key) {
         </div>
         <div v-if="!loggedIn" class="cc-login-tip" @click="router.push('/login')">登录后查看你的环保贡献 ›</div>
       </div>
+    </div>
+
+    <!-- 消费概览 (spending stats) — total spent + average + 3-bar monthly chart -->
+    <div class="spend-card" :class="{ 'sp-locked': !loggedIn }">
+      <div class="sp-head">
+        <span class="sp-icon">💰</span>
+        <span class="sp-title">消费概览</span>
+        <span class="sp-count">已购 {{ spendingStats.count }} 笔</span>
+      </div>
+      <template v-if="loggedIn">
+        <div class="sp-summary">
+          <div class="sp-stat">
+            <div class="sp-num">¥{{ fmt(spendingStats.total) }}</div>
+            <div class="sp-label">累计消费</div>
+          </div>
+          <div class="sp-divider"></div>
+          <div class="sp-stat">
+            <div class="sp-num">¥{{ fmt(spendingStats.avg) }}</div>
+            <div class="sp-label">笔均消费</div>
+          </div>
+        </div>
+        <!-- 近三月消费柱状图 (3-bar monthly chart) -->
+        <div class="sp-chart">
+          <div v-for="(b, i) in spendingStats.bars" :key="i" class="sp-bar-col">
+            <div class="sp-bar-track">
+              <div class="sp-bar" :class="{ 'sp-bar-cur': b.current }" :style="{ height: b.height + '%' }"></div>
+            </div>
+            <span class="sp-bar-val">¥{{ fmt(b.value) }}</span>
+            <span class="sp-bar-label">{{ b.label }}</span>
+          </div>
+        </div>
+      </template>
+      <div v-else class="sp-login-tip" @click="router.push('/login')">登录后查看消费明细 ›</div>
     </div>
 
     <van-cell-group inset title="我的订单">

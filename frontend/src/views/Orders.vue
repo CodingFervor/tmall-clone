@@ -263,6 +263,53 @@ async function copyToClipboard(text) {
     else showToast('复制失败，请重试')
   }
 }
+
+// ---- 下载发票 (invoice download) ----
+// Generates a plain-text electronic invoice summary for a completed order and
+// copies it to the clipboard (text invoice, no server round-trip). The summary
+// includes the invoice header (header info is a deterministic placeholder derived
+// from the logged-in user), the order's items with per-line subtotals, the
+// invoice total, the order number and the issue date. Reuses copyToClipboard for
+// the clipboard write so it works in non-secure contexts too.
+function invoiceHeader() {
+  // Derive a stable buyer name from the stored user profile, falling back to a
+  // generic label so the invoice always has a header line.
+  let buyer = '个人'
+  try {
+    const raw = localStorage.getItem('tm_user')
+    if (raw) {
+      const u = JSON.parse(raw)
+      buyer = u.nickname || u.username || '个人'
+    }
+  } catch (_) { /* keep default */ }
+  return buyer
+}
+function downloadInvoice(o) {
+  const items = parseItems(o.items_json)
+  const lines = []
+  lines.push('========== 电子发票 ==========')
+  lines.push('发票类型：电子普通发票')
+  lines.push('抬头：' + invoiceHeader())
+  lines.push('订单号：' + (o.order_no || o.id))
+  lines.push('开票日期：' + fmtFullTime(o.created_at))
+  lines.push('------------------------------')
+  let totalQty = 0
+  items.forEach((it, i) => {
+    const qty = Number(it.quantity) > 0 ? Number(it.quantity) : 1
+    const price = Number(it.price) || 0
+    totalQty += qty
+    lines.push(`${i + 1}. ${it.name || '-'}`)
+    lines.push(`   ¥${price.toFixed(2)} × ${qty} = ¥${(price * qty).toFixed(2)}`)
+  })
+  lines.push('------------------------------')
+  lines.push(`合计金额：¥${fmt(o.total)}`)
+  lines.push(`商品数量：${totalQty} 件`)
+  lines.push('------------------------------')
+  lines.push('天猫 TMALL · 发票代码: 1234567890')
+  lines.push('感谢您的惠顾，欢迎再次光临！')
+  lines.push('==============================')
+  copyToClipboard(lines.join('\n'))
+}
 </script>
 
 <template>
@@ -322,6 +369,7 @@ async function copyToClipboard(text) {
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain type="danger" round @click="viewLogistics(o)">查看物流</van-button>
             <van-button v-if="['paid','shipped','completed'].includes(o.status)" size="small" plain @click="applyRefund(o)">申请售后</van-button>
             <van-button v-if="o.status === 'completed'" size="small" type="danger" round :loading="repurchasing" @click="repurchase(o)">再次购买</van-button>
+            <van-button v-if="o.status === 'completed'" size="small" plain round @click="downloadInvoice(o)">📥下载发票</van-button>
             <!-- Order lifecycle timeline toggle (订单全流程时间线) -->
             <van-button size="small" plain round @click="toggleProgress(o)">{{ expanded[o.id] ? '收起进度' : '查看进度' }}</van-button>
           </div>

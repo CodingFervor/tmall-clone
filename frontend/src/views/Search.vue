@@ -192,9 +192,19 @@ function fmt(n) { return Number(n).toFixed(2) }
         </div>
       </div>
       <div class="hot">
-        <div class="h-head"><span>热门搜索</span></div>
+        <div class="h-head"><span>热门搜索</span><span class="hot-fire-hint">🔥 实时榜单</span></div>
         <div class="h-tags">
-          <van-tag v-for="h in hotList" :key="h" round type="primary" plain size="medium" @click="doSearch(h)">{{ h }}</van-tag>
+          <span
+            v-for="(h, i) in hotList"
+            :key="h"
+            class="hot-tag"
+            :class="{ 'hot-top': i < 3, 'hot-first': i === 0 }"
+            @click="doSearch(h)"
+          >
+            <span v-if="i < 3" class="hot-flame">🔥</span>
+            <span class="hot-rank">{{ i + 1 }}</span>
+            <span class="hot-text">{{ h }}</span>
+          </span>
         </div>
       </div>
     </div>
@@ -228,7 +238,19 @@ function fmt(n) { return Number(n).toFixed(2) }
 .suggest-arrow { color: #ccc; }
 .history, .hot { padding: 16px; background: #fff; margin-bottom: 8px; }
 .h-head { font-size: 14px; color: #666; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+/* 热门搜索火爆标签 (hot search fire) — 🔥 animated flame on top hot terms */
+.hot-fire-hint { font-size: 12px; color: #ff0036; font-weight: bold; }
 .h-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.hot-tag { display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px; border-radius: 999px; font-size: 14px; color: #333; background: #f7f7f7; border: 1px solid #eee; cursor: pointer; user-select: none; transition: transform 0.15s, background 0.15s, border-color 0.15s; }
+.hot-tag:active { transform: scale(0.95); }
+.hot-rank { font-size: 12px; font-weight: bold; color: #999; min-width: 12px; text-align: center; }
+.hot-text { line-height: 1; }
+.hot-flame { display: inline-block; font-size: 15px; transform-origin: bottom center; animation: hot-flame-flicker 0.9s ease-in-out infinite alternate; filter: drop-shadow(0 0 3px rgba(255, 102, 0, 0.5)); }
+@keyframes hot-flame-flicker { 0% { transform: scale(1) rotate(-3deg); opacity: 1; } 100% { transform: scale(1.22) rotate(4deg); opacity: 0.85; } }
+.hot-tag.hot-top { color: #ff0036; background: #fff5f6; border-color: #ffc6cf; font-weight: bold; }
+.hot-tag.hot-top .hot-rank { color: #ff0036; }
+.hot-tag.hot-first { background: linear-gradient(135deg, #ff0036, #ff5577); color: #fff; border-color: transparent; box-shadow: 0 2px 8px rgba(255, 0, 54, 0.35); }
+.hot-tag.hot-first .hot-rank { color: #fff; }
 /* 搜索云图 (search history tag cloud) */
 .cloud-tags { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; line-height: 1.6; }
 .cloud-tag { cursor: pointer; user-select: none; font-weight: bold; transition: transform 0.15s, opacity 0.15s; word-break: break-all; }
