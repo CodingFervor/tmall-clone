@@ -202,7 +202,39 @@ function dismissBall() {
   ballHidden.value = true
   try { localStorage.setItem(PRICE_TRACK_DISMISS_KEY, '1') } catch (_) {}
   showToast('已移除比价悬浮球')
-}</script>
+}
+
+// ---- 天气小卡片 (home weather widget) ----
+// Deterministic weather derived from today's date hash so the card is stable
+// for the whole day (no flicker, no API call). The hash picks one of three
+// conditions (晴/多云/雨) and maps to a temperature band + an emoji. Each
+// condition carries a festive shopping tip encouraging users to browse.
+const WEATHER_STATES = [
+  { icon: '☀️', name: '晴', tempBase: 26, tip: '阳光明媚，适合购物' },
+  { icon: '☁️', name: '多云', tempBase: 21, tip: '舒适宜人，适合购物' },
+  { icon: '🌧️', name: '小雨', tempBase: 17, tip: '雨天宅家，正好购物' },
+]
+const SHOPPING_TIPS = ['好物限时抢', '正品低价', '新人有礼', '满减专场', '品质优选']
+function dateHash() {
+  // Stable per-day hash from YYYY-MM-DD.
+  const d = new Date()
+  const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+  let h = 0
+  for (let i = 0; i < key.length; i++) {
+    h = (h * 31 + key.charCodeAt(i)) >>> 0
+  }
+  return h
+}
+const weather = computed(() => {
+  const h = dateHash()
+  const state = WEATHER_STATES[h % WEATHER_STATES.length]
+  // Vary the temperature ±4°C deterministically from the same hash.
+  const variance = (h % 9) - 4
+  const temp = state.tempBase + variance
+  const tip = SHOPPING_TIPS[(h >> 3) % SHOPPING_TIPS.length]
+  return { ...state, temp, tip }
+})
+</script>
 
 <template>
   <div class="home">
@@ -215,6 +247,21 @@ function dismissBall() {
 
     <div class="banner">
       <van-image width="100%" height="160" fit="cover" src="https://img.alicdn.com/imgextra/s1180x270/tmall-banner.jpg" />
+    </div>
+
+    <!-- 天气小卡片 (home weather widget): deterministic weather + temperature + shopping tip -->
+    <div class="weather-card">
+      <div class="w-left">
+        <span class="w-icon">{{ weather.icon }}</span>
+        <div class="w-meta">
+          <div class="w-temp"><span class="w-deg">{{ weather.temp }}</span><span class="w-unit">°C</span></div>
+          <div class="w-name">{{ weather.name }}</div>
+        </div>
+      </div>
+      <div class="w-tip">
+        <span class="w-tip-badge">🛍️ {{ weather.tip }}</span>
+        <span class="w-tip-sub">{{ weather.name }}天 · {{ weather.tip }}</span>
+      </div>
     </div>
 
     <div class="cat-grid">
@@ -372,6 +419,37 @@ function dismissBall() {
 .logo { color: #ff0036; font-weight: bold; font-size: 18px; }
 .search { flex: 1; padding: 0; }
 .banner { margin: 8px; border-radius: 8px; overflow: hidden; }
+/* 天气小卡片 (home weather widget) */
+.weather-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 8px 8px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #e3f2fd 0%, #fff8e1 60%, #ffeef0 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+.w-left { display: flex; align-items: center; gap: 10px; }
+.w-icon { font-size: 34px; line-height: 1; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.12)); }
+.w-meta { display: flex; flex-direction: column; }
+.w-temp { display: flex; align-items: baseline; gap: 1px; line-height: 1; }
+.w-deg { font-size: 24px; font-weight: bold; color: #ff0036; font-variant-numeric: tabular-nums; }
+.w-unit { font-size: 12px; color: #ff0036; font-weight: bold; }
+.w-name { font-size: 12px; color: #666; margin-top: 3px; }
+.w-tip { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.w-tip-badge {
+  font-size: 13px;
+  font-weight: bold;
+  color: #fff;
+  background: linear-gradient(135deg, #ff0036, #ff5577);
+  padding: 5px 12px;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(255, 0, 54, 0.3);
+  white-space: nowrap;
+}
+.w-tip-sub { font-size: 11px; color: #999; }
 .flash-banner { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 0 8px; padding: 14px 16px; background: linear-gradient(90deg, #ff0036, #ff2f5a); color: #fff; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.3s; }
 .flash-banner.flashing { background: linear-gradient(90deg, #ffb300, #ff0036); }
 .fb-text { letter-spacing: 0.5px; }
